@@ -352,6 +352,67 @@ internal static class Program
         voiceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Pump(200);
 
+        Console.WriteLine("== 筛选记忆 ==");
+        voiceButton!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Pump(500);
+
+        var genderFemale = Find<System.Windows.Controls.Primitives.ToggleButton>(picker!, "GenderFemale");
+        genderFemale!.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Pump(300);
+
+        var languageBox = Find<ComboBox>(picker!, "LanguageCombo")!;
+        var languageOptions = ((System.Collections.IEnumerable)languageBox.ItemsSource).Cast<object>().ToList();
+        var chineseIndex = languageOptions.FindIndex(o => o.ToString()!.Contains("中文", StringComparison.Ordinal));
+        languageBox.SelectedIndex = chineseIndex;
+        Pump(350);
+
+        var filteredCount = voiceList!.Items.Count;
+        Check("性别筛选写进设置", settings.VoiceFilterGender == "female", settings.VoiceFilterGender);
+        Check("语言筛选写进设置", settings.VoiceFilterLanguage == "zh", settings.VoiceFilterLanguage);
+
+        voiceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Pump(250);
+        Check("关面板后筛选仍在设置里", settings.VoiceFilterLanguage == "zh" && settings.VoiceFilterGender == "female");
+
+        voiceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Pump(500);
+        var genderFemale2 = Find<System.Windows.Controls.Primitives.ToggleButton>(picker!, "GenderFemale")!;
+        var languageBox2 = Find<ComboBox>(picker!, "LanguageCombo")!;
+        Check("重新打开后性别还是女声", genderFemale2.IsChecked == true);
+        Check("重新打开后语言还是中文", languageBox2.SelectedIndex == chineseIndex,
+            languageBox2.SelectedIndex + " vs " + chineseIndex);
+        Check("重新打开后筛选结果一致", voiceList.Items.Count == filteredCount,
+            voiceList.Items.Count + " vs " + filteredCount);
+
+        // 恢复默认筛选，别影响后面的用例
+        Find<System.Windows.Controls.Primitives.ToggleButton>(picker!, "GenderAll")!
+            .RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Pump(200);
+        languageBox2.SelectedIndex = 0;
+        Pump(250);
+        voiceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Pump(200);
+
+        Console.WriteLine("== 删除记录 ==");
+        var deleteTarget = (TtsItem)history!.Items[0];
+        var downloadedBefore = Directory.GetFiles(downloadDir).ToList();
+        var cacheBefore = deleteTarget.Files.Where(File.Exists).ToList();
+        var countBeforeDelete = history.Items.Count;
+
+        var deleteButton = FindByToolTip(history, "删除这条记录（已下载的文件保留）");
+        Check("卡片上有删除按钮", deleteButton is not null && deleteButton.IsVisible);
+
+        if (deleteButton is not null)
+        {
+            deleteButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Pump(350);
+            Check("删除后卡片消失", !history.Items.Contains(deleteTarget), history.Items.Count + " 张");
+            Check("卡片数减一", history.Items.Count == countBeforeDelete - 1);
+            Check("已下载的文件不受影响", downloadedBefore.All(File.Exists));
+            Check("缓存片段被清掉", cacheBefore.All(f => !File.Exists(f)), cacheBefore.Count + " 个");
+            Check("状态栏说明文件保留", status!.Text.Contains("保留", StringComparison.Ordinal), status.Text);
+        }
+
         Console.WriteLine("== 快捷键 ==");
         var composerBox = Find<TextBox>(window, "InputBox")!;
         var beforeShortcut = history!.Items.Count;
@@ -397,6 +458,21 @@ internal static class Program
             && Find<System.Windows.Controls.Primitives.ToggleButton>(settingsWindow, "ThemeDark") is not null);
         var folderBox = Find<TextBox>(settingsWindow, "DownloadBox");
         Check("设置里的下载文件夹与当前一致", folderBox is not null && folderBox.Text == downloadDir, folderBox?.Text);
+
+        Console.WriteLine("== 存储目录不被焊死 ==");
+        var defaultFolder = ALambdaTTS.Services.AppSettings.DefaultDownloadFolder;
+        Check("默认目录是音乐下的 ATTS", defaultFolder.EndsWith("ATTS", StringComparison.OrdinalIgnoreCase), defaultFolder);
+        Check("能认出默认目录",
+            ALambdaTTS.Services.AppSettings.IsDefaultDownloadFolder(defaultFolder)
+            && !ALambdaTTS.Services.AppSettings.IsDefaultDownloadFolder(downloadDir));
+
+        var typedDefault = folderBox!.Text;
+        folderBox.Text = defaultFolder;
+        Pump(150);
+        Check("填默认目录时设置里存 null", settings.DownloadFolder is null, settings.DownloadFolder ?? "(null)");
+        folderBox.Text = typedDefault;
+        Pump(150);
+        Check("填自定义目录时照常存路径", settings.DownloadFolder == downloadDir, settings.DownloadFolder);
         Save(settingsWindow, "06-settings-light.png");
         SaveZoom(settingsWindow, "06-settings-zoom.png", 1.5);
 

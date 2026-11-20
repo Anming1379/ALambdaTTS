@@ -229,4 +229,31 @@ Keyboard.Modifiers（读的是真实键盘状态），只能直接调这两个�
    带中文描述与 topics：tts / edge-tts / wpf / dotnet / csharp / text-to-speech），
    首版 51 个文件以 v1.0.0 提交推送到 main，并用 Release 附上安装包。
    .gitattributes 统一 eol=crlf，字体 / 图标 / exe 标记为 binary。
+
+十一、筛选记忆 / 卡片删除 / 存储目录（第五轮，v1.0.1）
+----------------------------------------------------------------
+1  筛选记忆：AppSettings 增加 VoiceFilterGender / VoiceFilterLanguage，
+   VoicePickerView.Initialize 多收两个参数，恢复上次的性别与语言大类；
+   语言不存在（音色表更新过）就退回「全部语言」。
+   筛选变化通过 FilterChanged 事件回写给 MainWindow，立即 SettingsStore.Save。
+   搜索框文字不持久化（那属于临时输入）。
+2  卡片删除按钮：卡片右侧第三个图标（垃圾桶，TextFaint），只在合成中禁用。
+   删除动作 = 从列表移除 + 删掉该卡片的临时缓存片段，
+   删除前用 Path.GetFullPath 比对是否真在 AppPaths.CacheDir 下，
+   下载文件夹里的文件一个都不碰；状态栏提示「下载文件夹里的文件保留」。
+   原来的右键菜单「删除这张卡片」共用同一套逻辑。
+3  存储目录：
+   - 设置里填写的下载路径如果等于默认目录（音乐\ATTS），一律存 null，
+     默认目录改成每次现算（AppSettings.DefaultDownloadFolder），
+     系统「音乐」位置变了程序会跟着走，不再把绝对路径焊死。
+   - 安装包 [Run] 段落补 runasoriginaluser：安装程序是管理员权限，
+     但首次启动必须是普通用户身份，否则设置／缓存会写进管理员账户的
+     %LOCALAPPDATA%，看起来就像「安装改了存储目录」。
+   - [Setup] 明确 UsePreviousAppDir=yes / UsePreviousGroup=yes，
+     重装与升级沿用上次的安装位置与程序组。
+4  版本号改由程序集读取（关于页显示 1.0.1），csproj 与打包脚本一起升到 1.0.1。
+5  自检：TtsProbe 48 项、UiHarness 81 项全部通过。
+   新增：筛选写进设置 / 关面板不丢 / 重开后性别语言与结果都一致、
+        卡片有删除按钮、删除后卡片消失且下载文件仍在而缓存被清、
+        默认目录识别、填默认值存 null、填自定义值存路径。
 ================================================================

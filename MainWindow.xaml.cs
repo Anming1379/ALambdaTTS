@@ -54,6 +54,12 @@ public partial class MainWindow : Window
 
         VoicePicker.VoiceChosen += VoicePicker_VoiceChosen;
         VoicePicker.CloseRequested += (_, _) => CloseVoicePanel();
+        VoicePicker.FilterChanged += (_, _) =>
+        {
+            _settings.VoiceFilterGender = VoicePicker.SelectedGender;
+            _settings.VoiceFilterLanguage = VoicePicker.SelectedLanguage;
+            SettingsStore.Save(_settings);
+        };
         ThemeManager.Changed += ThemeManager_Changed;
 
         SourceInitialized += (_, _) =>
@@ -146,7 +152,7 @@ public partial class MainWindow : Window
 
     private void OpenVoicePanel()
     {
-        VoicePicker.Initialize(_catalog, _voice);
+        VoicePicker.Initialize(_catalog, _voice, _settings.VoiceFilterGender, _settings.VoiceFilterLanguage);
         VoiceOverlay.Visibility = Visibility.Visible;
         // 等布局完成再抢焦点，否则搜索框还没生成
         Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(VoicePicker.FocusSearch));
@@ -595,7 +601,48 @@ public partial class MainWindow : Window
         }
 
         _items.Remove(item);
-        StatusText.Text = "已删除这张卡片";
+
+        // 只清程序自己的缓存；下载文件夹里已经存下来的文件一个都不碰
+        var purged = DeleteCacheFiles(item);
+        StatusText.Text = purged > 0
+            ? "已删除这条记录（下载文件夹里的文件保留）"
+            : "已删除这条记录";
+    }
+
+    private static int DeleteCacheFiles(TtsItem item)
+    {
+        var removed = 0;
+        string cacheRoot;
+        try
+        {
+            cacheRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(AppPaths.CacheDir))
+                + Path.DirectorySeparatorChar;
+        }
+        catch
+        {
+            return 0;
+        }
+
+        foreach (var file in item.Files)
+        {
+            try
+            {
+                var full = Path.GetFullPath(file);
+                if (!full.StartsWith(cacheRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                File.Delete(full);
+                removed++;
+            }
+            catch
+            {
+                // 正在播放的文件可能被占用，退出时统一清
+            }
+        }
+
+        return removed;
     }
 
     private void ScrollToEnd()

@@ -17,7 +17,13 @@ public partial class SettingsWindow : Window
 
         InitializeComponent();
 
-        AboutText.Text = "ALambda TTS 1.0.0\n"
+        // 版本号直接读程序集，改 csproj 就够了，不用两处维护
+        var version = typeof(SettingsWindow).Assembly.GetName().Version ?? new Version(1, 0, 0);
+        var versionText = version.Build > 0
+            ? $"{version.Major}.{version.Minor}.{version.Build}"
+            : $"{version.Major}.{version.Minor}";
+
+        AboutText.Text = $"ALambda TTS {versionText}\n"
             + "Edge TTS 桌面客户端 · 语音由微软 Edge 朗读接口合成\n"
             + "技术栈 .NET 10 / WPF · 作者 Anming_cat\n"
             + "代码由 AI 生成，作者负责需求、设计与验收\n"
@@ -65,7 +71,8 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        _settings.DownloadFolder = DownloadBox.Text.Trim();
+        var text = DownloadBox.Text.Trim();
+        _settings.DownloadFolder = AppSettings.IsDefaultDownloadFolder(text) ? null : text;
         SettingsStore.Save(_settings);
     }
 

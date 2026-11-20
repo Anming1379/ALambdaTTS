@@ -25,6 +25,15 @@ public partial class VoicePickerView : UserControl
     /// <summary>面板里按了 Esc（键盘事件不会冒泡到主窗口）。</summary>
     public event EventHandler? CloseRequested;
 
+    /// <summary>筛选条件变了，主窗口把它写回设置。</summary>
+    public event EventHandler? FilterChanged;
+
+    /// <summary>当前性别筛选（all / female / male）。</summary>
+    public string SelectedGender => _gender;
+
+    /// <summary>当前语言大类代码，空表示全部语言。</summary>
+    public string SelectedLanguage => _language;
+
     /// <summary>面板打开时把光标放到搜索框。</summary>
     public void FocusSearch()
     {
@@ -49,17 +58,36 @@ public partial class VoicePickerView : UserControl
         }
     }
 
-    public void Initialize(VoiceCatalog catalog, VoiceEntry? selected)
+    /// <summary>打开面板。性别 / 语言筛选沿用上次的选择，找不到对应语言就退回全部。</summary>
+    public void Initialize(
+        VoiceCatalog catalog,
+        VoiceEntry? selected,
+        string? gender = null,
+        string? language = null)
     {
         _suppressEvents = true;
         _catalog = catalog;
-        _gender = "all";
-        _language = string.Empty;
+
+        _gender = (gender ?? string.Empty).Trim().ToLowerInvariant();
+        if (_gender is not ("female" or "male"))
+        {
+            _gender = "all";
+        }
 
         BuildLanguageOptions();
-        GenderAll.IsChecked = true;
-        GenderFemale.IsChecked = false;
-        GenderMale.IsChecked = false;
+
+        var wanted = (language ?? string.Empty).Trim();
+        var match = (LanguageCombo.ItemsSource as List<LocaleOption>)?
+            .FirstOrDefault(o => o.Code.Length > 0 && o.Code.Equals(wanted, StringComparison.OrdinalIgnoreCase));
+
+        _language = match?.Code ?? string.Empty;
+        LanguageCombo.SelectedIndex = match is null
+            ? 0
+            : (LanguageCombo.ItemsSource as List<LocaleOption>)!.IndexOf(match);
+
+        GenderAll.IsChecked = _gender == "all";
+        GenderFemale.IsChecked = _gender == "female";
+        GenderMale.IsChecked = _gender == "male";
         SearchBox.Text = string.Empty;
         _suppressEvents = false;
 
@@ -163,6 +191,7 @@ public partial class VoicePickerView : UserControl
         _suppressEvents = false;
 
         ApplyFilter();
+        FilterChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void LanguageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -176,6 +205,7 @@ public partial class VoicePickerView : UserControl
         {
             _language = option.Code;
             ApplyFilter();
+            FilterChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 

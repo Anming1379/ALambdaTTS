@@ -22,6 +22,12 @@ public sealed class AppSettings
     /// <summary>最后使用的音色 ShortName。</summary>
     public string? VoiceShortName { get; set; }
 
+    /// <summary>音色面板上次的性别筛选：all / female / male。</summary>
+    public string? VoiceFilterGender { get; set; }
+
+    /// <summary>音色面板上次的语言大类代码（zh、en ...），空表示全部语言。</summary>
+    public string? VoiceFilterLanguage { get; set; }
+
     /// <summary>语速百分比，-50 ~ +100。</summary>
     public int Rate { get; set; }
 
@@ -35,6 +41,21 @@ public sealed class AppSettings
 
     public double WindowHeight { get; set; } = 760;
 
+    /// <summary>默认下载目录：系统音乐文件夹下的 ATTS。每次现算，跟着系统设置走。</summary>
+    public static string DefaultDownloadFolder
+    {
+        get
+        {
+            var music = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
+            if (string.IsNullOrWhiteSpace(music))
+            {
+                music = Path.Combine(AppPaths.Root, "Audio");
+            }
+
+            return Path.Combine(music, "ATTS");
+        }
+    }
+
     public string ResolveDownloadFolder()
     {
         if (!string.IsNullOrWhiteSpace(DownloadFolder))
@@ -42,12 +63,29 @@ public sealed class AppSettings
             return DownloadFolder.Trim();
         }
 
-        var music = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
-        if (string.IsNullOrWhiteSpace(music))
+        return DefaultDownloadFolder;
+    }
+
+    /// <summary>
+    /// 路径是否就是默认目录。是的话设置里存 null，别把绝对路径焊死——
+    /// 否则以后用户把「音乐」挪到别的盘，程序还往老地方存。
+    /// </summary>
+    public static bool IsDefaultDownloadFolder(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
         {
-            music = Path.Combine(AppPaths.Root, "Audio");
+            return true;
         }
 
-        return Path.Combine(music, "ATTS");
+        try
+        {
+            var candidate = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path.Trim()));
+            var fallback = Path.TrimEndingDirectorySeparator(Path.GetFullPath(DefaultDownloadFolder));
+            return string.Equals(candidate, fallback, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

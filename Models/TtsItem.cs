@@ -60,6 +60,7 @@ public sealed class TtsItem : INotifyPropertyChanged
                 OnPropertyChanged(nameof(IsBusy));
                 OnPropertyChanged(nameof(CanPlay));
                 OnPropertyChanged(nameof(CanRetry));
+                OnPropertyChanged(nameof(CanDelete));
                 OnPropertyChanged(nameof(PlayIcon));
                 OnPropertyChanged(nameof(StatusLabel));
                 OnPropertyChanged(nameof(ShowStatus));
@@ -126,6 +127,9 @@ public sealed class TtsItem : INotifyPropertyChanged
 
     /// <summary>失败后显示重试按钮。</summary>
     public bool CanRetry => State == TtsState.Failed;
+
+    /// <summary>合成中的卡片先不给删，免得删到一半回调还在写。</summary>
+    public bool CanDelete => State != TtsState.Synthesizing;
 
     public string PlayIcon => IsPlaying ? IconGlyphs.Pause : IconGlyphs.PlayArrow;
 

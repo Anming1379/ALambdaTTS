@@ -19,6 +19,9 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\ALambda TTS
 DefaultGroupName=ALambda TTS
 DisableProgramGroupPage=yes
+; 重装/升级时沿用上次选的安装目录，不擅自改
+UsePreviousAppDir=yes
+UsePreviousGroup=yes
 OutputDir=Output
 OutputBaseFilename=ALambdaTTS-Setup-{#MyAppVersion}
 SetupIconFile=..\assets\app.ico
@@ -53,7 +56,9 @@ Name: "{autodesktop}\ALambda TTS"; Filename: "{app}\{#MyAppExeName}"; Tasks: des
 
 [Run]
 Filename: "{tmp}\install-dotnet.cmd"; Parameters: "/quiet"; StatusMsg: "正在检测并安装 .NET 10 桌面运行时…"; Flags: waituntilterminated; Check: NeedsDotNetRuntime
-Filename: "{app}\{#MyAppExeName}"; Description: "启动 ALambda TTS"; Flags: nowait postinstall skipifsilent; Check: HasDesktopRuntime
+; runasoriginaluser：安装程序是管理员权限，但首次启动必须用普通用户身份，
+; 否则设置会写进管理员账户的 %LOCALAPPDATA%，看起来就像"存储目录被改了"
+Filename: "{app}\{#MyAppExeName}"; Description: "启动 ALambda TTS"; Flags: nowait postinstall skipifsilent runasoriginaluser; Check: HasDesktopRuntime
 
 [Code]
 function HasRuntimeUnder(BaseDir: String): Boolean;

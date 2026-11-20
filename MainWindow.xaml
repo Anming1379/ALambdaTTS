@@ -173,6 +173,11 @@
                                             <TextBlock Text="{x:Static themes:IconGlyphs.Download}" Style="{StaticResource IconText}"
                                                        FontSize="19" />
                                         </Button>
+                                        <Button Style="{StaticResource IconButton}" Click="CardDelete_Click"
+                                                ToolTip="删除这条记录（已下载的文件保留）" IsEnabled="{Binding CanDelete}">
+                                            <TextBlock Text="{x:Static themes:IconGlyphs.Delete}" Style="{StaticResource IconText}"
+                                                       FontSize="18" Foreground="{DynamicResource TextFaint}" />
+                                        </Button>
                                         <Button Style="{StaticResource IconButton}" Click="CardRetry_Click"
                                                 ToolTip="重新合成这一次请求"
                                                 Visibility="{Binding CanRetry, Converter={StaticResource BoolToVisibility}}">
