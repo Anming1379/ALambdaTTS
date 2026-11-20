@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>ALambdaTTS</RootNamespace>
+    <AssemblyName>ALambdaTTS</AssemblyName>
+    <Version>1.0.0</Version>
+    <Product>ALambda TTS</Product>
+    <Company>Anming_cat</Company>
+    <Authors>Anming_cat</Authors>
+    <AssemblyTitle>ALambda TTS</AssemblyTitle>
+    <Description>Edge TTS desktop client</Description>
+    <ApplicationIcon>assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EdgeTTS.DotNet" Version="0.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="assets\MaterialSymbolsSharp.ttf" />
+    <Resource Include="assets\app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="tests\**" />
+    <Page Remove="tests\**" />
+    <None Remove="tests\**" />
+    <None Remove="publish\**" />
+    <None Remove="installer\Output\**" />
+  </ItemGroup>
+
+</Project>

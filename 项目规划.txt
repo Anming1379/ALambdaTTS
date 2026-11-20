@@ -1,0 +1,175 @@
+================================================================
+ ALambda TTS - 项目规划
+ 作者: Anming_cat
+ 技术: C# / .NET 10 / WPF / EdgeTTS.DotNet 0.4.0
+ 更新: 2026-11-20
+================================================================
+
+一、目标
+----------------------------------------------------------------
+Edge TTS 的 Windows 桌面客户端：输入文字 -> 生成语音 -> 立即播放。
+界面直角、简约、深浅双色主题跟随系统，强调色 #20808D（真绿松石）。
+图标统一使用 assets/MaterialSymbolsSharp.ttf（Material Symbols Sharp）。
+
+二、已确认的产品决策
+----------------------------------------------------------------
+1  历史卡片只在本次运行内有效：退出程序即清空缓存目录，必须点
+   "下载"才能把 mp3 保存到磁盘（默认 音乐/ATTS/）。
+2  播放：生成完成立即自动播放；同一时刻只播一条；切换卡片自动停前一条。
+3  语速 / 音量各一个自绘旋钮（上下拖动），不提供音调 pitch。
+4  保留 Windows 11 原生标题栏，只用 DWM 改标题栏颜色跟随主题，
+   不改窗口圆角（保持系统默认行为）。
+5  长文本：超过单段上限时按句子切成多段，逐段请求，
+   每段各自落成独立的 mp3 片段，不做二进制拼接（不引入 ffmpeg）。
+   一个请求 = 一个卡片 = 一组片段，播放时按顺序连续播，下载时保存全部片段。
+6  强调色的"可调不透明度"指设计阶段使用不同 alpha 的强调色层级
+   （Accent / AccentSoft / AccentFaint ...），不提供用户侧滑块。
+7  不做托盘图标、不做最小化到托盘；应用单实例，重复启动会激活已有窗口。
+8  产品名 ALambda TTS，署名 Anming_cat；界面语言中文。
+9  打包：框架依赖单文件 publish + Inno Setup 安装包，
+   安装时检测 .NET 10 桌面运行时，缺失则调用 install-dotnet 脚本自动下载安装。
+
+三、目录结构
+----------------------------------------------------------------
+ALambdaTTS/
+  ALambdaTTS.csproj      net10.0-windows / WinExe / 内嵌字体与图标
+  NuGet.config           走 cn-mirror
+  app.manifest           PerMonitorV2 DPI
+  App.xaml(.cs)          主题字典装载、单实例、启动 MainWindow
+  MainWindow.xaml(.cs)   四段式主界面
+  Themes/
+    Tokens.Light.xaml    浅色色板
+    Tokens.Dark.xaml     深色色板
+    Controls.xaml        直角控件模板 / 图标字号 / 滚动条 / 列表项
+  Controls/
+    Knob.cs              自绘旋钮（拖动、滚轮、双击复位、键盘）
+    VoicePicker.xaml     音色面板（搜索 + 语言 + 性别 + 虚拟化列表）
+  Models/
+    TtsItem.cs           一张历史卡片
+    VoiceEntry.cs        音色条目（含类别、语言显示名）
+    AppSettings.cs       设置模型
+  Services/
+    AppPaths.cs          目录与文件名工具
+    SettingsStore.cs     设置读写
+    ThemeManager.cs      深浅色 + 强调色色板
+    NativeTheme.cs       DWM 标题栏配色
+    VoiceCatalog.cs      音色表（在线拉取 + 本地 json 缓存）
+    TextChunker.cs       长文本按句切段
+    TtsService.cs        合成管线（流式写盘 / 进度 / 取消）
+    AudioPlayer.cs       MediaPlayer 顺序播放一组片段
+    SingleInstance.cs    单实例激活
+  Views/
+    SettingsWindow.xaml  设置（主题 / 下载文件夹）
+  tests/
+    TtsProbe/            控制台 harness：真实合成 + 断言
+    UiHarness/           进程内 UI 断言（VisualTreeHelper）
+  tools/
+    make-icon.ps1        生成 app.ico
+  installer/
+    ALambdaTTS.iss       Inno Setup 脚本
+    build-installer.ps1  打包流程
+  assets/
+    MaterialSymbolsSharp.ttf
+    app.ico
+    install-dotnet.ps1 / install-dotnet.cmd
+
+四、界面
+----------------------------------------------------------------
+工具栏（高 52）：[音色按钮] ................. [语速旋钮] [音量旋钮] [设置]
+  音色按钮显示 "图标 + 当前音色名 + 性别"，点击弹出面板：
+  搜索框 / 性别筛选(全部/女声/男声) / 语言筛选 / 虚拟化列表，
+  条目右侧显示自动获得的类别标签，选中即收起。
+
+历史区（中部，占满剩余空间）：
+  每张卡片 = 一次请求。左侧文本预览（最多 3 行），右侧播放/下载图标，
+  底部强调色小字 "音色 · 语速 · 时长 · 片段数"；生成中显示细进度条。
+  空状态显示居中的提示文字与图标。
+
+输入区（下部）：
+  多行文本框，焦点时整体高度 96 -> 168 平滑展开，失焦且为空时收回。
+  支持粘贴、拖入 .txt（多文件按空行拼接）。右侧方形强调色发送按钮；
+  生成中同一按钮变成取消（stop）。Enter 发送，Shift+Enter 换行，Esc 取消。
+
+状态栏（底部 26）：左侧状态文字 + 进度百分比；右侧下载文件夹（点击打开）。
+
+五、关键实现要点
+----------------------------------------------------------------
+* 旋钮用 OnRender 画 270 度弧 + 指针，垂直拖动 1 px = 1 个单位步长，
+  滚轮步进 5，双击回默认值；值变化即时显示在右侧小字。
+* 主题：所有颜色写入 Application.Resources（DynamicResource 引用），
+  切换时整窗即时换肤；监听注册表 AppsUseLightTheme 跟随系统变化。
+* 音色目录：启动时异步拉取，成功则写 %LOCALAPPDATA%\ALambdaTTS\voices.json；
+  失败回退到本地缓存；语言显示名用 CultureInfo，特殊 locale 手工兜底。
+* 合成：每段一个 Communicate，StreamAsync 流式写盘 -> 进度按
+  "已完成段数 + 段内已播文本占比" 计算；支持 CancellationToken 取消。
+* 音频：System.Windows.Media.MediaPlayer，MediaEnded 自动切下一片段。
+* 缓存目录 %LOCALAPPDATA%\ALambdaTTS\cache，启动和退出各清理一次。
+
+六、开发阶段
+----------------------------------------------------------------
+P0 骨架      项目 / 主题字典 / 空壳窗口，构建通过
+P1 引擎      TextChunker + TtsService + AudioPlayer，控制台 harness 实测
+P2 主界面    四段布局 / 历史卡片 / 输入区展开动画
+P3 交互      旋钮手感 / 音色面板 / 拖入 txt / 快捷键 / 播放下载
+P4 设置      设置窗口 / 持久化 / 单实例 / DWM 标题栏
+P5 收尾      UI harness / 图标 / Inno Setup / README
+
+七、实现记录（已完成）
+----------------------------------------------------------------
+1  P0~P5 全部完成，两套 harness 全绿：
+     tests/TtsProbe   44 项：分段、参数格式、令牌向量、真实合成、
+                      长文本多段、取消、音色目录
+     tests/UiHarness  56 项：布局、旋钮、输入框展开、真实合成 + 自动播放、
+                      下载落盘、两段顺序连播、主题切换、音色面板、设置窗口、
+                      退出清缓存
+2  后端遇到并解决的问题：EdgeTTS.DotNet 0.4.0 的 DRM 令牌是 v1，
+   服务端现在只认 v2（403）。处理方式：
+     - 把 python edge-tts 7.3.1 的 drm.py（CS64 + 定制 SHA256）逐行移植成
+       Services/EdgeTts/SecMsGec.cs，用 7 组官方实现产出的向量校验通过
+     - 合成改自实现：RawWebSocket（TLS 帧读写）+ EdgeTtsClient（speech.config / SSML）
+       ClientWebSocket 发的帧会被服务端以 Bad request 拒绝，换成自实现后正常
+     - 音色列表仍走 EdgeTTS.DotNet.Voices.ListVoicesAsync()
+     - 踩到的坑：C# 插值字符串里的 }}}} 会被转义成 }}，导致配置 JSON 少括号
+                  服务端只认完整音色名 Microsoft Server Speech Text to Speech Voice (xx-XX, xxx)
+3  图标：Material Symbols Sharp 依赖 rlig 连字，WPF 不应用，写图标名只会渲染成字母。
+   改为私用区码位，由 tools/make-icon-glyphs.py 从 ttf 反查生成 Themes/IconGlyphs.cs。
+4  旋钮做了双极中心点（CenterValue）：语速 0% 指向 12 点，音量仍是单极 0~100。
+5  产物：
+     publish/app/ALambdaTTS.exe                     框架依赖单文件 1.6 MB
+     installer/Output/ALambdaTTS-Setup-1.0.0.exe    安装包 2.5 MB（含运行时检测）
+6  待作者处理：app.ico 目前是脚本生成的占位图标（tools/make-icon.py 可重出）。
+
+八、试用反馈修复（第二轮）
+----------------------------------------------------------------
+1  点音色没反应：根因是音色面板用了 Popup。Popup 是独立 HWND，命中测试与
+   键盘焦点都不跟主窗口走（实测 Popup 里连 TextBox.Focus() 都返回 false）。
+   改法：Popup 换成主窗口内的叠层 Grid（VoiceOverlay，遮罩 + 面板），
+   遮罩点击收起、Esc 收起、开关按钮切换，面板打开后自动把光标放进搜索框。
+   顺带把根 Grid 的工具栏行高写死 55，避免叠层把布局撑高。
+2  点某个音色的判定不再依赖 ListBoxItem 的默认选中行为：改用
+   ListBox.PreviewMouseUp + ContainerFromElement 自己命中容器再选中。
+3  旋钮数字抖动：数值 TextBlock 固定 Width=42 + TextAlignment=Left。
+4  语言筛选合并：VoiceEntry 增加 LanguageCode（locale 首段）与 75 条中文语言名，
+   VoiceCatalog.Languages 按语言大类分组，下拉显示「中文（14）」；zh 排第一。
+5  重复保存覆盖：TtsItem 记录 CreatedAt，下载文件名固定用它，
+   File.Copy(overwrite: true)，状态栏提示「已覆盖 N 个文件」。
+6  网络抖动体验：TtsService 失败重试由 2 次提到 3 次（间隔 400ms/800ms），
+   底层异常翻译成人话（TLS 握手失败 / 网络连接失败 / 网络连接被中断），
+   详细堆栈写 %LOCALAPPDATA%\ALambdaTTS\error.log；失败卡片加红色重试按钮，
+   点一下用该卡片自己的文本与参数重来。
+   起因：试用时遇到 IOException「Received an unexpected EOF or 0 bytes from
+   the transport stream」，即 TLS 连接被中断，属于 TUN 代理抖动。
+7  两套 harness：TtsProbe 44 项、UiHarness 61 项，全部通过。
+
+九、快捷键调整（第三轮）
+----------------------------------------------------------------
+Enter          发送（等价于点发送按钮；生成中按 Enter 不再插换行）
+Shift + Enter  输入框内换行（不拦截，交给 TextBox 自己处理）
+Ctrl + L       聚焦输入框并把光标放到末尾，面板开着会先收起
+Ctrl + Enter   保留，行为同 Enter
+Esc            有面板先收面板，否则取消正在进行的合成
+实现上把判定抽成 MainWindow.HandleShortcut(key, modifiers) 与
+HandleComposerKeyAsync(key, modifiers)，因为测试进程里没法伪造
+Keyboard.Modifiers（读的是真实键盘状态），只能直接调这两个方法验证。
+占位提示、空状态提示、发送按钮 tooltip 一并改成 Enter。
+================================================================

@@ -1,0 +1,29 @@
+================================================================
+ ALambda TTS - 第三方组件说明
+================================================================
+
+1. EdgeTTS.DotNet 0.4.0
+   作者   Curry
+   仓库   https://github.com/twn39/EdgeTTS.DotNet
+   许可   MIT License
+   用途   仅使用 Voices.ListVoicesAsync() 获取音色列表。
+          合成部分未使用该库（其 DRM 令牌为 v1，服务端已只接受 v2），
+          改为本项目 Services/EdgeTts 下的自实现。
+
+2. Material Symbols Sharp（MaterialSymbolsSharp.ttf）
+   来源   Google Fonts / Material Design Icons
+   许可   Apache License 2.0
+   用途   界面图标字体，图标以私用区码位方式使用。
+
+3. .NET 10 / WPF / WindowsDesktop 运行时
+   许可   MIT License
+   用途   应用框架。
+
+4. 微软 Edge 朗读接口（speech.platform.bing.com）
+   本项目通过公开的 Edge 朗读 WebSocket 接口合成语音，
+   不附带任何微软的二进制文件；语音服务的可用性与条款由微软决定。
+
+----------------------------------------------------------------
+本项目的代码由 AI 助手按作者（Anming_cat）提供的 PRD 生成，
+作者已完成需求定义、界面与行为决策以及验收。
+================================================================

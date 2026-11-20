@@ -1,0 +1,11 @@
+bin/
+obj/
+publish/
+dist/
+installer/Output/
+tests/**/bin/
+tests/**/obj/
+*.user
+*.suo
+*.tmp
+.vs/
