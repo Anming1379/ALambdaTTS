@@ -1,8 +1,46 @@
 ================================================================
+十、语调旋钮 / 关于页 / 开源仓库（第四轮）
+----------------------------------------------------------------
+1  语调旋钮：工具栏由「语速 + 音量」扩成「语速 + 语调 + 音量」。
+   范围 -50 ~ +50，步进 5，双极中心（0 指向 12 点），显示成 +20Hz / 0Hz。
+   Edge 侧映射 SSML 的 pitch='+20Hz'（相对原音高偏移，与 edge-tts 一致）。
+   链路：MainWindow.PitchKnob -> TtsItem.Pitch -> TtsService.SynthesizeAsync
+        -> EdgeTtsClient（SSML prosody pitch）-> AppSettings.Pitch 持久化。
+   工具栏格子做了压缩：旋钮 27->26，数值列 42->40，音色名 150->140，
+   窗口默认宽 560->600、最小宽 480->540，保证 540 宽也不挤。
+2  关于页补两行：「代码由 AI 生成，作者负责需求、设计与验收」
+   与「开源仓库 github.com/Anming1379/ALambdaTTS」。
+3  自检：TtsProbe 48 项（新增 3 条 BuildPitch 断言 + 带语调的真实合成），
+   UiHarness 65 项（新增三旋钮、语调不抖动、语调带 Hz、语调随请求提交）。
+   实测服务端接受 pitch='+40Hz'。
+4  开源：新建仓库 https://github.com/Anming1379/ALambdaTTS（public，
+   带中文描述与 topics：tts / edge-tts / wpf / dotnet / csharp / text-to-speech），
+   首版 51 个文件以 v1.0.0 提交推送到 main，并用 Release 附上安装包。
+   .gitattributes 统一 eol=crlf，字体 / 图标 / exe 标记为 binary。
+================================================================
  ALambda TTS - 项目规划
  作者: Anming_cat
  技术: C# / .NET 10 / WPF / EdgeTTS.DotNet 0.4.0
  更新: 2026-11-20
+================================================================
+十、语调旋钮 / 关于页 / 开源仓库（第四轮）
+----------------------------------------------------------------
+1  语调旋钮：工具栏由「语速 + 音量」扩成「语速 + 语调 + 音量」。
+   范围 -50 ~ +50，步进 5，双极中心（0 指向 12 点），显示成 +20Hz / 0Hz。
+   Edge 侧映射 SSML 的 pitch='+20Hz'（相对原音高偏移，与 edge-tts 一致）。
+   链路：MainWindow.PitchKnob -> TtsItem.Pitch -> TtsService.SynthesizeAsync
+        -> EdgeTtsClient（SSML prosody pitch）-> AppSettings.Pitch 持久化。
+   工具栏格子做了压缩：旋钮 27->26，数值列 42->40，音色名 150->140，
+   窗口默认宽 560->600、最小宽 480->540，保证 540 宽也不挤。
+2  关于页补两行：「代码由 AI 生成，作者负责需求、设计与验收」
+   与「开源仓库 github.com/Anming1379/ALambdaTTS」。
+3  自检：TtsProbe 48 项（新增 3 条 BuildPitch 断言 + 带语调的真实合成），
+   UiHarness 65 项（新增三旋钮、语调不抖动、语调带 Hz、语调随请求提交）。
+   实测服务端接受 pitch='+40Hz'。
+4  开源：新建仓库 https://github.com/Anming1379/ALambdaTTS（public，
+   带中文描述与 topics：tts / edge-tts / wpf / dotnet / csharp / text-to-speech），
+   首版 51 个文件以 v1.0.0 提交推送到 main，并用 Release 附上安装包。
+   .gitattributes 统一 eol=crlf，字体 / 图标 / exe 标记为 binary。
 ================================================================
 
 一、目标
@@ -172,4 +210,23 @@ Esc            有面板先收面板，否则取消正在进行的合成
 HandleComposerKeyAsync(key, modifiers)，因为测试进程里没法伪造
 Keyboard.Modifiers（读的是真实键盘状态），只能直接调这两个方法验证。
 占位提示、空状态提示、发送按钮 tooltip 一并改成 Enter。
+================================================================
+十、语调旋钮 / 关于页 / 开源仓库（第四轮）
+----------------------------------------------------------------
+1  语调旋钮：工具栏由「语速 + 音量」扩成「语速 + 语调 + 音量」。
+   范围 -50 ~ +50，步进 5，双极中心（0 指向 12 点），显示成 +20Hz / 0Hz。
+   Edge 侧映射 SSML 的 pitch='+20Hz'（相对原音高偏移，与 edge-tts 一致）。
+   链路：MainWindow.PitchKnob -> TtsItem.Pitch -> TtsService.SynthesizeAsync
+        -> EdgeTtsClient（SSML prosody pitch）-> AppSettings.Pitch 持久化。
+   工具栏格子做了压缩：旋钮 27->26，数值列 42->40，音色名 150->140，
+   窗口默认宽 560->600、最小宽 480->540，保证 540 宽也不挤。
+2  关于页补两行：「代码由 AI 生成，作者负责需求、设计与验收」
+   与「开源仓库 github.com/Anming1379/ALambdaTTS」。
+3  自检：TtsProbe 48 项（新增 3 条 BuildPitch 断言 + 带语调的真实合成），
+   UiHarness 65 项（新增三旋钮、语调不抖动、语调带 Hz、语调随请求提交）。
+   实测服务端接受 pitch='+40Hz'。
+4  开源：新建仓库 https://github.com/Anming1379/ALambdaTTS（public，
+   带中文描述与 topics：tts / edge-tts / wpf / dotnet / csharp / text-to-speech），
+   首版 51 个文件以 v1.0.0 提交推送到 main，并用 Release 附上安装包。
+   .gitattributes 统一 eol=crlf，字体 / 图标 / exe 标记为 binary。
 ================================================================

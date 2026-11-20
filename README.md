@@ -8,6 +8,13 @@ C# / .NET 10 / WPF，直角简约风，深浅双色主题自动跟随系统。
 
 ---
 
+## 下载
+
+安装包在 [Releases](https://github.com/Anming1379/ALambdaTTS/releases)：
+`ALambdaTTS-Setup-1.0.0.exe`（2.5 MB），双击安装；缺少 .NET 10 桌面运行时会引导安装。
+
+---
+
 ## 功能
 
 - 音色：自动获取全部 318 个音色（含中文 14 个），可按语言、性别、关键词筛选，
