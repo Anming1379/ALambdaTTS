@@ -202,4 +202,34 @@ public static class IconGlyphs
     /// <summary>circle</summary>
     public const string Circle = "\uEF4A";
 
+    /// <summary>lan</summary>
+    public const string Lan = "\uEB2F";
+
+    /// <summary>wifi_find</summary>
+    public const string WifiFind = "\uEB31";
+
+    /// <summary>link_off</summary>
+    public const string LinkOff = "\uE16F";
+
+    /// <summary>logout</summary>
+    public const string Logout = "\uE9BA";
+
+    /// <summary>send</summary>
+    public const string Send = "\uE163";
+
+    /// <summary>person_add</summary>
+    public const string PersonAdd = "\uE7FE";
+
+    /// <summary>sync_alt</summary>
+    public const string SyncAlt = "\uEA18";
+
+    /// <summary>devices</summary>
+    public const string Devices = "\uE1B1";
+
+    /// <summary>cell_tower</summary>
+    public const string CellTower = "\uEBBA";
+
+    /// <summary>cable</summary>
+    public const string Cable = "\uEFE6";
+
 }

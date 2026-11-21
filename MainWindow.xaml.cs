@@ -9,6 +9,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using ALambdaTTS.Models;
 using ALambdaTTS.Services;
+using ALambdaTTS.Services.Lan;
 using ALambdaTTS.Themes;
 using ALambdaTTS.Views;
 
@@ -29,6 +30,12 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _cts;
     private bool _busy;
 
+    private readonly LanService _lan = new();
+    private readonly Queue<LanChatMessage> _remoteQueue = new();
+    private readonly DispatcherTimer _lanTimer;
+    private bool _remotePumping;
+    private bool _reconnecting;
+
     public MainWindow(AppSettings settings)
     {
         _settings = settings;
@@ -45,7 +52,6 @@ public partial class MainWindow : Window
 
         RateKnob.Value = Math.Clamp(settings.Rate, -50, 100);
         PitchKnob.Value = Math.Clamp(settings.Pitch, -50, 50);
-        VolumeKnob.Value = Math.Clamp(settings.Volume, 0, 100);
 
         _player.PlayingChanged += Player_PlayingChanged;
         _player.DurationResolved += Player_DurationResolved;
@@ -62,6 +68,25 @@ public partial class MainWindow : Window
         };
         ThemeManager.Changed += ThemeManager_Changed;
 
+        LanPanel.ValuesChanged += LanPanel_ValuesChanged;
+        LanPanel.DiscoverRequested += LanPanel_DiscoverRequested;
+        LanPanel.PairRequested += LanPanel_PairRequested;
+        LanPanel.ManualPairRequested += LanPanel_ManualPairRequested;
+        LanPanel.DisconnectRequested += LanPanel_DisconnectRequested;
+        LanPanel.CloseRequested += (_, _) => CloseLanPanel();
+
+        _lan.StatusChanged += (_, status) => OnUi(() => LanPanel.SetStatus(status));
+        _lan.PeerDiscovered += (_, peer) => OnUi(() => LanPanel.AddPeer(peer));
+        _lan.MessageReceived += (_, message) => OnUi(() => OnLanMessage(message));
+
+        // 断了就自己连回去（同一台对端、同一个配对码）
+        _lanTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(5),
+        };
+        _lanTimer.Tick += LanTimer_Tick;
+        _lanTimer.Start();
+
         SourceInitialized += (_, _) =>
         {
             NativeTheme.Apply(this);
@@ -71,12 +96,21 @@ public partial class MainWindow : Window
         Loaded += MainWindow_Loaded;
         Closing += MainWindow_Closing;
 
-        Deactivated += (_, _) => CloseVoicePanel();
+        Deactivated += (_, _) =>
+        {
+            CloseVoicePanel();
+            CloseLanPanel();
+        };
 
         UpdateVoiceButton();
         UpdateDownloadFolder();
         UpdateEmptyState();
         UpdateSendState();
+
+        if (_settings.LanEnabled)
+        {
+            StartLan();
+        }
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -107,13 +141,14 @@ public partial class MainWindow : Window
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         _cts?.Cancel();
+        _lanTimer.Stop();
+        _lan.StopAsync().GetAwaiter().GetResult();
         _player.Dispose();
 
         _settings.WindowWidth = Width;
         _settings.WindowHeight = Height;
         _settings.Rate = (int)RateKnob.Value;
         _settings.Pitch = (int)PitchKnob.Value;
-        _settings.Volume = (int)VolumeKnob.Value;
         _settings.VoiceShortName = _voice.ShortName;
         SettingsStore.Save(_settings);
     }
@@ -191,6 +226,7 @@ public partial class MainWindow : Window
         if (key == Key.L && control)
         {
             CloseVoicePanel();
+            CloseLanPanel();
             FocusComposer();
             return true;
         }
@@ -200,6 +236,12 @@ public partial class MainWindow : Window
             if (IsVoicePanelOpen)
             {
                 CloseVoicePanel();
+                return true;
+            }
+
+            if (IsLanPanelOpen)
+            {
+                CloseLanPanel();
                 return true;
             }
 
@@ -246,6 +288,291 @@ public partial class MainWindow : Window
         StatusText.Text = $"音色已切换为 {entry.DisplayName}";
     }
 
+    // ================= 局域网 =================
+
+    /// <summary>本机在局域网里的显示名。</summary>
+    public string LocalDeviceName => string.IsNullOrWhiteSpace(_settings.LanDeviceName)
+        ? Environment.MachineName
+        : _settings.LanDeviceName!.Trim();
+
+    private bool IsLanPanelOpen => LanOverlay.Visibility == Visibility.Visible;
+
+    /// <summary>局域网是否正在监听（自检用）。</summary>
+    public bool IsLanListening => _lan.State != LanState.Stopped;
+
+    /// <summary>当前是否已和另一台电脑配对成功（自检用）。</summary>
+    public bool IsLanConnected => _lan.IsConnected;
+
+    private void LanButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (IsLanPanelOpen)
+        {
+            CloseLanPanel();
+            return;
+        }
+
+        OpenLanPanel();
+    }
+
+    private void OpenLanPanel()
+    {
+        CloseVoicePanel();
+        EnsurePairCode();
+        LanPanel.Load(BuildLanValues(), _settings.LanPeerName, _lan.IsConnected);
+        LanPanel.SetStatus(new LanStatus(
+            _lan.State,
+            _lan.State == LanState.Stopped ? "未启用" : "等待配对",
+            _lan.Peer));
+        LanOverlay.Visibility = Visibility.Visible;
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(LanPanel.FocusName));
+    }
+
+    private void CloseLanPanel()
+    {
+        if (IsLanPanelOpen)
+        {
+            LanOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void LanOverlay_Dismiss(object sender, MouseButtonEventArgs e)
+    {
+        CloseLanPanel();
+        e.Handled = true;
+    }
+
+    private LanPanelValues BuildLanValues() => new(
+        _settings.LanEnabled,
+        LocalDeviceName,
+        _settings.LanPairCode ?? string.Empty,
+        _settings.LanPort,
+        _settings.LanPeerHost);
+
+    private void EnsurePairCode()
+    {
+        if (string.IsNullOrWhiteSpace(_settings.LanPairCode))
+        {
+            _settings.LanPairCode = Random.Shared
+                .Next(100000, 1000000)
+                .ToString(System.Globalization.CultureInfo.InvariantCulture);
+            SettingsStore.Save(_settings);
+        }
+    }
+
+    private void StartLan()
+    {
+        EnsurePairCode();
+        _lan.Start(LocalDeviceName, _settings.LanPort, _settings.LanPairCode ?? string.Empty);
+        UpdateLanButton();
+    }
+
+    private void LanPanel_ValuesChanged(object? sender, LanPanelValues values)
+    {
+        var enabling = values.Enabled && !_settings.LanEnabled;
+        var disabling = !values.Enabled && _settings.LanEnabled;
+
+        _settings.LanDeviceName = values.DeviceName;
+        _settings.LanPairCode = values.PairCode;
+        _settings.LanPort = values.Port;
+        _settings.LanEnabled = values.Enabled;
+
+        if (disabling)
+        {
+            _ = _lan.StopAsync();
+        }
+        else if (values.Enabled)
+        {
+            // Start 幂等：名字和配对码即时生效，端口变了才重新绑定
+            _lan.Start(values.DeviceName, values.Port, values.PairCode);
+            if (enabling)
+            {
+                StatusText.Text = $"局域网已开启，配对码 {values.PairCode}";
+            }
+        }
+
+        SettingsStore.Save(_settings);
+        UpdateLanButton();
+    }
+
+    private async void LanPanel_DiscoverRequested(object? sender, EventArgs e)
+    {
+        if (!_settings.LanEnabled)
+        {
+            StatusText.Text = "先打开局域网开关";
+            return;
+        }
+
+        StatusText.Text = "正在搜索局域网里的设备…";
+        var peers = await _lan.DiscoverAsync(TimeSpan.FromSeconds(2));
+        foreach (var peer in peers)
+        {
+            LanPanel.AddPeer(peer);
+        }
+
+        StatusText.Text = peers.Count == 0
+            ? "没搜到设备，试试直接填对方 IP 连接"
+            : $"发现 {peers.Count} 台设备";
+    }
+
+    private async void LanPanel_PairRequested(object? sender, LanPeer peer)
+        => await PairWithAsync(peer.Host, peer.Port, announce: true);
+
+    private async void LanPanel_ManualPairRequested(object? sender, LanManualTarget target)
+        => await PairWithAsync(target.Host, target.Port, announce: true);
+
+    private async Task<bool> PairWithAsync(string host, int port, bool announce)
+    {
+        var code = _settings.LanPairCode ?? string.Empty;
+        if (announce)
+        {
+            StatusText.Text = $"正在连接 {host}:{port}…";
+        }
+
+        var paired = await _lan.PairAsync(host, port, code);
+        if (paired)
+        {
+            _settings.LanPeerHost = host;
+            _settings.LanPeerPort = port;
+            _settings.LanPeerName = _lan.Peer?.Name;
+            SettingsStore.Save(_settings);
+            LanPanel.SetPeer(_lan.Peer?.Name, true);
+            StatusText.Text = $"已连接 {_lan.Peer?.Name} · 消息会同时在这台电脑朗读";
+        }
+        else if (announce)
+        {
+            StatusText.Text = "配对失败：检查配对码，或确认对方也开着局域网模式";
+        }
+
+        UpdateLanButton();
+        return paired;
+    }
+
+    private async void LanPanel_DisconnectRequested(object? sender, EventArgs e)
+    {
+        await _lan.DisconnectAsync();
+        LanPanel.SetPeer(null, false);
+        StatusText.Text = "已断开局域网连接";
+        UpdateLanButton();
+    }
+
+    /// <summary>断了就悄悄重连，不刷状态栏。</summary>
+    private async void LanTimer_Tick(object? sender, EventArgs e)
+    {
+        if (!_settings.LanEnabled || _lan.IsConnected || _lan.State != LanState.Listening)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_settings.LanPeerHost) || _reconnecting)
+        {
+            return;
+        }
+
+        _reconnecting = true;
+        try
+        {
+            await _lan.PairAsync(
+                _settings.LanPeerHost!,
+                _settings.LanPeerPort,
+                _settings.LanPairCode ?? string.Empty);
+            UpdateLanButton();
+        }
+        finally
+        {
+            _reconnecting = false;
+        }
+    }
+
+    private void UpdateLanButton()
+    {
+        var connected = _lan.IsConnected;
+        LanDot.Visibility = connected ? Visibility.Visible : Visibility.Collapsed;
+        LanIcon.Foreground = (System.Windows.Media.Brush)FindResource(connected ? "Accent" : "TextMuted");
+        LanButton.ToolTip = connected
+            ? $"局域网：已连接 {_lan.Peer?.Name}"
+            : _settings.LanEnabled ? "局域网模式（等待配对）" : "局域网模式（配对另一台电脑）";
+    }
+
+    private void OnUi(Action action)
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(action);
+        }
+    }
+
+    /// <summary>收到对端消息：入队后串行合成播放，避免和本机请求抢设备。</summary>
+    public void OnLanMessage(LanChatMessage message)
+    {
+        _remoteQueue.Enqueue(message);
+        if (!_remotePumping)
+        {
+            _ = PumpRemoteQueueAsync();
+        }
+    }
+
+    private async Task PumpRemoteQueueAsync()
+    {
+        _remotePumping = true;
+        try
+        {
+            while (_remoteQueue.Count > 0)
+            {
+                while (_busy && _remoteQueue.Count > 0)
+                {
+                    await Task.Delay(200);
+                }
+
+                if (_remoteQueue.Count == 0)
+                {
+                    break;
+                }
+
+                var message = _remoteQueue.Dequeue();
+                var voice = _catalog.Find(message.Voice ?? string.Empty) ?? _voice;
+                var item = new TtsItem(
+                    message.Text,
+                    voice,
+                    message.Rate,
+                    message.Pitch,
+                    message.Volume,
+                    $"来自 {message.FromName}");
+
+                _items.Add(item);
+                ScrollToEnd();
+                StatusText.Text = $"收到 {message.FromName} 的消息，正在合成…";
+
+                await RunSynthesisAsync(item, clearInput: false);
+            }
+        }
+        finally
+        {
+            _remotePumping = false;
+        }
+    }
+
+    private async Task SendLanAsync(string text)
+    {
+        var message = new LanChatMessage(
+            Guid.NewGuid().ToString("N"),
+            LocalDeviceName,
+            text,
+            _voice.ShortName,
+            (int)RateKnob.Value,
+            (int)PitchKnob.Value,
+            100,
+            DateTimeOffset.Now);
+
+        if (!await _lan.SendAsync(message))
+        {
+            StatusText.Text = "局域网消息没发出去，只在本机朗读了";
+        }
+    }
+
     // ================= 合成 =================
 
     private async void SendButton_Click(object sender, RoutedEventArgs e)
@@ -272,14 +599,22 @@ public partial class MainWindow : Window
             return;
         }
 
+        var lanConnected = _lan.IsConnected;
         var item = new TtsItem(
             text,
             _voice,
             (int)RateKnob.Value,
             (int)PitchKnob.Value,
-            (int)VolumeKnob.Value);
+            100,
+            lanConnected ? $"由 {LocalDeviceName} 发送" : null);
+
         _items.Add(item);
         ScrollToEnd();
+
+        if (lanConnected)
+        {
+            _ = SendLanAsync(text);
+        }
 
         await RunSynthesisAsync(item, clearInput: true);
     }

@@ -37,6 +37,28 @@ public sealed class AppSettings
     /// <summary>音量百分比，0 ~ 100（合成时映射成 -100% ~ +0%）。</summary>
     public int Volume { get; set; } = 100;
 
+    // ---------- 局域网模式 ----------
+
+    /// <summary>启动时是否自动开启局域网监听。</summary>
+    public bool LanEnabled { get; set; }
+
+    /// <summary>本机在局域网里显示的名字，空则用计算机名。</summary>
+    public string? LanDeviceName { get; set; }
+
+    /// <summary>本机监听端口。</summary>
+    public int LanPort { get; set; } = 45790;
+
+    /// <summary>配对码：两边一致才能配对。</summary>
+    public string? LanPairCode { get; set; }
+
+    /// <summary>上次配对的对端名字（界面上显示）。</summary>
+    public string? LanPeerName { get; set; }
+
+    /// <summary>上次配对的对端地址，用来重连。</summary>
+    public string? LanPeerHost { get; set; }
+
+    public int LanPeerPort { get; set; } = 45790;
+
     public double WindowWidth { get; set; } = 600;
 
     public double WindowHeight { get; set; } = 760;

@@ -10,6 +10,7 @@ using ALambdaTTS;
 using ALambdaTTS.Controls;
 using ALambdaTTS.Models;
 using ALambdaTTS.Services;
+using ALambdaTTS.Services.Lan;
 
 namespace UiHarness;
 
@@ -72,12 +73,12 @@ internal static class Program
         var rate = Find<Knob>(window, "RateKnob");
         var pitch = Find<Knob>(window, "PitchKnob");
         var volume = Find<Knob>(window, "VolumeKnob");
-        Check("工具栏三个旋钮都在", rate is not null && pitch is not null && volume is not null);
+        Check("工具栏只剩语速与语调两个旋钮", rate is not null && pitch is not null);
+        Check("音量旋钮已移除", volume is null);
         Check("语调旋钮默认 0", pitch is not null && Math.Abs(pitch.Value) < 0.001, pitch?.Value.ToString());
         Check("语速旋钮默认 0", rate is not null && Math.Abs(rate.Value) < 0.001, rate?.Value.ToString());
-        Check("音量旋钮默认 100", volume is not null && Math.Abs(volume.Value - 100) < 0.001, volume?.Value.ToString());
         Check("语速范围 -50~100", rate is not null && rate.Minimum == -50 && rate.Maximum == 100);
-        Check("音量范围 0~100", volume is not null && volume.Minimum == 0 && volume.Maximum == 100);
+        Check("语调范围 -50~50", pitch is not null && pitch.Minimum == -50 && pitch.Maximum == 50);
 
         var send = Find<Button>(window, "SendButton");
         var input = Find<TextBox>(window, "InputBox");
@@ -105,7 +106,6 @@ internal static class Program
         Save(window, "02-focused-light.png");
         SaveZoom(window, "02-toolbar-zoom.png", 2.4);
         SaveElement(rate, "02-knob-rate.png", 10);
-        SaveElement(volume, "02-knob-volume.png", 10);
 
         input.Text = "你好，这是 ALambda TTS 的界面自检。";
         Pump(200);
@@ -115,24 +115,19 @@ internal static class Program
         Console.WriteLine("== 旋钮交互 ==");
         rate!.Value = 25;
         pitch!.Value = 20;
-        volume!.Value = 60;
         Pump(50);
         Check("旋钮值可写",
-            Math.Abs(rate.Value - 25) < 0.001 && Math.Abs(pitch.Value - 20) < 0.001 && Math.Abs(volume.Value - 60) < 0.001);
+            Math.Abs(rate.Value - 25) < 0.001 && Math.Abs(pitch.Value - 20) < 0.001);
         var rateX1 = rate.TransformToAncestor(window).Transform(new Point(0, 0)).X;
         var pitchX1 = pitch.TransformToAncestor(window).Transform(new Point(0, 0)).X;
-        var volumeX1 = volume.TransformToAncestor(window).Transform(new Point(0, 0)).X;
         rate.Value = 100;
         pitch.Value = -50;
-        volume.Value = 5;
         Pump(200);
         var rateX2 = rate.TransformToAncestor(window).Transform(new Point(0, 0)).X;
         var pitchX2 = pitch.TransformToAncestor(window).Transform(new Point(0, 0)).X;
-        var volumeX2 = volume.TransformToAncestor(window).Transform(new Point(0, 0)).X;
         Check("数值变化时旋钮不位移",
-            Math.Abs(rateX1 - rateX2) < 0.6 && Math.Abs(pitchX1 - pitchX2) < 0.6
-            && Math.Abs(volumeX1 - volumeX2) < 0.6,
-            $"rate {rateX1:F1}->{rateX2:F1}, pitch {pitchX1:F1}->{pitchX2:F1}, volume {volumeX1:F1}->{volumeX2:F1}");
+            Math.Abs(rateX1 - rateX2) < 0.6 && Math.Abs(pitchX1 - pitchX2) < 0.6,
+            $"rate {rateX1:F1}->{rateX2:F1}, pitch {pitchX1:F1}->{pitchX2:F1}");
         Check("语调显示带 Hz",
             new ALambdaTTS.Utils.KnobValueConverter()
                 .Convert(20d, typeof(string), "pitch", System.Globalization.CultureInfo.InvariantCulture) as string == "+20Hz",
@@ -141,7 +136,6 @@ internal static class Program
 
         rate.Value = 0;
         pitch.Value = 0;
-        volume.Value = 100;
 
         Console.WriteLine("== 真实合成 + 自动播放 ==");
         send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -412,6 +406,147 @@ internal static class Program
             Check("缓存片段被清掉", cacheBefore.All(f => !File.Exists(f)), cacheBefore.Count + " 个");
             Check("状态栏说明文件保留", status!.Text.Contains("保留", StringComparison.Ordinal), status.Text);
         }
+
+        Console.WriteLine("== 局域网面板 ==");
+        var lanButton = Find<Button>(window, "LanButton");
+        Check("工具栏有局域网按钮", lanButton is not null && lanButton.IsVisible);
+
+        lanButton!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Pump(400);
+        var lanOverlay = (Grid)window.FindName("LanOverlay")!;
+        var lanPanel = (FrameworkElement)window.FindName("LanPanel")!;
+        Check("局域网面板能打开", lanOverlay.Visibility == Visibility.Visible);
+
+        var nameBox = lanPanel.FindName("NameBox") as TextBox;
+        var codeBox = lanPanel.FindName("CodeBox") as TextBox;
+        Check("面板填好了本机名称", !string.IsNullOrWhiteSpace(nameBox?.Text), nameBox?.Text);
+        Check("面板生成了 6 位配对码", codeBox?.Text.Length == 6, codeBox?.Text);
+        Check("配对码写进设置", settings.LanPairCode == codeBox?.Text, settings.LanPairCode);
+
+        var enableToggle = (System.Windows.Controls.Primitives.ToggleButton)lanPanel.FindName("EnableToggle")!;
+        enableToggle.IsChecked = true;
+        enableToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Pump(600);
+        Check("打开开关后设置里记下了", settings.LanEnabled);
+        Check("开始监听端口", window.IsLanListening);
+        Check("状态栏提示配对码", status!.Text.Contains("局域网已开启", StringComparison.Ordinal), status.Text);
+        Save(window, "08-lan-panel.png");
+
+        // 真起一个对端服务，连上窗口自己的监听端口，走完整 TCP 链路
+        Console.WriteLine("== 局域网真实连接 ==");
+        var peer = new LanService();
+        peer.Start("电脑 B", 45802, codeBox!.Text);
+        Pump(300);
+
+        var pairTask = peer.PairAsync("127.0.0.1", settings.LanPort, codeBox.Text);
+        var pairedByPeer = PumpUntil(() => pairTask.IsCompleted, 12000) && pairTask.Result;
+        Check("对端服务能配对上本窗口", pairedByPeer);
+        Check("窗口自己也认为已连接", PumpUntil(() => window.IsLanConnected, 4000), "未连接");
+        Check("对端记下了本机名字", peer.Peer?.Name.Length > 0, peer.Peer?.Name);
+
+        var countBeforePeer = history!.Items.Count;
+        var sendTask = peer.SendAsync(new LanChatMessage(
+            "peer-1",
+            "电脑 B",
+            "这条是对端通过 TCP 发过来的。",
+            "zh-CN-XiaoxiaoNeural",
+            0,
+            -5,
+            100,
+            DateTimeOffset.Now));
+        PumpUntil(() => sendTask.IsCompleted, 5000);
+        Check("对端消息发送成功", sendTask.IsCompleted && sendTask.Result);
+
+        var peerReady = PumpUntil(
+            () => history.Items.Count > countBeforePeer
+                  && history.Items[history.Items.Count - 1] is TtsItem { State: TtsState.Ready },
+            60000);
+        var peerItem = history.Items.Count > countBeforePeer
+            ? history.Items[history.Items.Count - 1] as TtsItem
+            : null;
+        Check("TCP 消息进了历史并完成合成", peerReady, peerItem?.StatusLabel);
+        Check("TCP 消息标注来自 电脑 B",
+            peerItem?.MetaText.Contains("来自 电脑 B", StringComparison.Ordinal) == true,
+            peerItem?.MetaText);
+        Check("TCP 消息带上了语调", peerItem is { Pitch: -5 }, "Pitch=" + peerItem?.Pitch);
+
+        // 反向：本机发一条，看对端能不能收到（这就是配对后最常用的路径）
+        var peerInbox = new List<LanChatMessage>();
+        peer.MessageReceived += (_, message) =>
+        {
+            lock (peerInbox)
+            {
+                peerInbox.Add(message);
+            }
+        };
+
+        var countBeforeSend = history.Items.Count;
+        input!.Text = "你好，电脑 B";
+        Pump(200);
+        send!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        var localReady = PumpUntil(
+            () => history.Items.Count > countBeforeSend
+                  && history.Items[history.Items.Count - 1] is TtsItem { State: TtsState.Ready },
+            60000);
+        var localItem = history.Items.Count > countBeforeSend
+            ? history.Items[history.Items.Count - 1] as TtsItem
+            : null;
+
+        Check("本机发送的卡片标注发送方",
+            localItem?.MetaText.Contains("由 " + window.LocalDeviceName + " 发送", StringComparison.Ordinal) == true,
+            localItem?.MetaText);
+        Check("本机卡片同样完成合成", localReady, localItem?.StatusLabel);
+        Check("对端收到了本机发的消息",
+            PumpUntil(() => { lock (peerInbox) { return peerInbox.Count >= 1; } }, 5000),
+            "没收到");
+        lock (peerInbox)
+        {
+            Check("对端收到的正文一致", peerInbox.Count >= 1 && peerInbox[0].Text == "你好，电脑 B",
+                peerInbox.Count >= 1 ? peerInbox[0].Text : "空");
+            Check("对端知道是本机发的", peerInbox.Count >= 1 && peerInbox[0].FromName == window.LocalDeviceName,
+                peerInbox.Count >= 1 ? peerInbox[0].FromName : "空");
+        }
+
+        peer.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        Pump(300);
+        Check("对端关闭后本窗口感知断开", PumpUntil(() => !window.IsLanConnected, 5000));
+
+        var countBeforeLan = history!.Items.Count;
+        window.OnLanMessage(new LanChatMessage(
+            "probe-1",
+            "电脑 B",
+            "这是对端发来的朗读请求。",
+            "zh-CN-XiaoxiaoNeural",
+            0,
+            10,
+            100,
+            DateTimeOffset.Now));
+
+        var remoteReady = PumpUntil(
+            () => history.Items.Count > countBeforeLan
+                  && history.Items[history.Items.Count - 1] is TtsItem { State: TtsState.Ready },
+            60000);
+        var remoteItem = history.Items.Count > countBeforeLan
+            ? history.Items[history.Items.Count - 1] as TtsItem
+            : null;
+
+        Check("远端消息生成了卡片", remoteItem is not null);
+        Check("卡片标注来自 电脑 B",
+            remoteItem?.MetaText.Contains("来自 电脑 B", StringComparison.Ordinal) == true,
+            remoteItem?.MetaText);
+        Check("远端消息完成本机合成", remoteReady, remoteItem?.StatusLabel);
+        Check("远端消息带着对端的语调", remoteItem is { Pitch: 10 }, "Pitch=" + remoteItem?.Pitch);
+        Check("远端消息开始播放", remoteItem?.IsPlaying == true);
+
+        enableToggle.IsChecked = false;
+        enableToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Pump(500);
+        Check("关掉开关后不再监听", !window.IsLanListening);
+
+        lanButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Pump(300);
+        Check("再点按钮收起局域网面板", lanOverlay.Visibility != Visibility.Visible);
 
         Console.WriteLine("== 快捷键 ==");
         var composerBox = Find<TextBox>(window, "InputBox")!;

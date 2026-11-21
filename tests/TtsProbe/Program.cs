@@ -4,6 +4,7 @@ using System.Text;
 using ALambdaTTS.Models;
 using ALambdaTTS.Services;
 using ALambdaTTS.Services.EdgeTts;
+using ALambdaTTS.Services.Lan;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -254,6 +255,104 @@ catch (Exception ex)
 {
     failures++;
     Console.WriteLine($"  [FAIL] 音色目录异常 -> {ex.GetType().Name}: {ex.Message}");
+}
+
+// ---------------------------------------------------------------
+// 9. 局域网：配对 + 收发消息
+// ---------------------------------------------------------------
+Console.WriteLine("9) 局域网配对与消息");
+try
+{
+    static async Task<bool> WaitUntil(Func<bool> condition, int timeoutMs)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (Environment.TickCount64 < deadline)
+        {
+            if (condition())
+            {
+                return true;
+            }
+
+            await Task.Delay(50);
+        }
+
+        return condition();
+    }
+
+    var peerA = new LanService();
+    var peerB = new LanService();
+    var received = new List<LanChatMessage>();
+    var statuses = new List<LanStatus>();
+    peerB.MessageReceived += (_, message) => { lock (received) { received.Add(message); } };
+    peerA.StatusChanged += (_, status) => { lock (statuses) { statuses.Add(status); } };
+
+    peerA.Start("电脑 A", 45801, "123456");
+    peerB.Start("电脑 B", 45802, "123456");
+    await Task.Delay(250);
+
+    Check("启动后进入等待配对", peerA.State == LanState.Listening && peerB.State == LanState.Listening,
+        peerA.State + "/" + peerB.State);
+    Check("记录本机端口", peerA.Port == 45801 && peerB.Port == 45802);
+
+    var paired = await peerA.PairAsync("127.0.0.1", 45802, "123456");
+    Check("主动配对成功", paired);
+    Check("A 侧已连接", peerA.IsConnected && peerA.State == LanState.Connected, peerA.State.ToString());
+    Check("A 记下了对端名字", peerA.Peer?.Name == "电脑 B", peerA.Peer?.Name);
+    Check("B 侧也认为已连接", await WaitUntil(() => peerB.IsConnected, 3000));
+
+    var sent = await peerA.SendAsync(new LanChatMessage(
+        "m1", "电脑 A", "你好，电脑 B", "zh-CN-XiaoxiaoNeural", 0, 10, 100, DateTimeOffset.Now));
+    Check("发送消息成功", sent);
+    Check("对端收到消息", await WaitUntil(() => { lock (received) { return received.Count >= 1; } }, 3000));
+    lock (received)
+    {
+        Check("消息正文一致", received.Count >= 1 && received[0].Text == "你好，电脑 B",
+            received.Count >= 1 ? received[0].Text : "没收到");
+        Check("对端知道消息来自电脑 A", received.Count >= 1 && received[0].FromName == "电脑 A");
+        Check("音色与语调参数一起传过去",
+            received.Count >= 1 && received[0].Voice == "zh-CN-XiaoxiaoNeural" && received[0].Pitch == 10);
+    }
+
+    var intruder = new LanService();
+    intruder.Start("电脑 X", 45803, "000000");
+    await Task.Delay(200);
+    var rejected = await intruder.PairAsync("127.0.0.1", 45802, "999999");
+    Check("配对码不对时被拒绝", !rejected);
+    Check("拒绝后 B 仍是原连接", await WaitUntil(() => peerB.IsConnected, 1000));
+    await intruder.DisposeAsync();
+
+    // 广播发现：直接往本机发现端口发一包，等服务应答
+    using (var udp = new System.Net.Sockets.UdpClient())
+    {
+        udp.EnableBroadcast = true;
+        var query = LanCodec.EncodeDatagram(new LanFrame
+        {
+            Type = "discover",
+            DeviceId = "test-probe",
+            Name = "探针",
+            Port = 1,
+        });
+        await udp.SendAsync(query, new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, LanService.DefaultDiscoveryPort));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var reply = await udp.ReceiveAsync(timeout.Token);
+        var frame = LanCodec.Decode(reply.Buffer);
+        Check("发现应答能被解析", frame?.Type == "discover-reply" && frame.DeviceId is { Length: > 8 },
+            frame?.Type ?? "null");
+        Check("发现应答带着设备名", frame?.Name is "电脑 A" or "电脑 B", frame?.Name);
+    }
+
+    await peerA.DisconnectAsync();
+    Check("主动断开后 A 回到等待", await WaitUntil(() => !peerA.IsConnected, 2000), peerA.State.ToString());
+    Check("对端也感知到断开", await WaitUntil(() => !peerB.IsConnected, 3000), peerB.State.ToString());
+
+    await peerA.DisposeAsync();
+    await peerB.DisposeAsync();
+    Check("停止后状态为未启用", peerA.State == LanState.Stopped && peerB.State == LanState.Stopped);
+}
+catch (Exception ex)
+{
+    failures++;
+    Console.WriteLine($"  [FAIL] 局域网异常 -> {ex.GetType().Name}: {ex.Message}");
 }
 
 // ---------------------------------------------------------------

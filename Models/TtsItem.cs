@@ -22,17 +22,30 @@ public sealed class TtsItem : INotifyPropertyChanged
     private TimeSpan _duration;
     private string? _errorMessage;
 
-    public TtsItem(string text, VoiceEntry voice, int rate, int pitch, int volume)
+    public TtsItem(
+        string text,
+        VoiceEntry voice,
+        int rate,
+        int pitch,
+        int volume,
+        string? originLabel = null)
     {
         Text = text;
         Voice = voice;
         Rate = rate;
         Pitch = pitch;
         Volume = volume;
+        OriginLabel = originLabel;
         Preview = BuildPreview(text);
     }
 
     public string Text { get; }
+
+    /// <summary>
+    /// 来源标注：本机走局域网发送时是「由 电脑 A 发送」，收到对端消息是「来自 电脑 B」；
+    /// 没开局域网就是 null，卡片保持原来的样子。
+    /// </summary>
+    public string? OriginLabel { get; }
 
     /// <summary>卡片创建时间。重复点下载时文件名不变，直接覆盖原文件。</summary>
     public DateTime CreatedAt { get; } = DateTime.Now;
@@ -148,7 +161,14 @@ public sealed class TtsItem : INotifyPropertyChanged
     {
         get
         {
-            var parts = new List<string> { $"{Voice.DisplayName} · {Voice.GenderLabel}" };
+            var parts = new List<string>();
+
+            if (!string.IsNullOrEmpty(OriginLabel))
+            {
+                parts.Add(OriginLabel);
+            }
+
+            parts.Add($"{Voice.DisplayName} · {Voice.GenderLabel}");
 
             if (Rate != 0)
             {

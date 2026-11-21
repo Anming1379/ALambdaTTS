@@ -24,6 +24,9 @@ NAMES = [
     "upload_file", "chevron_right", "arrow_drop_down", "notes",
     "text_snippet", "draft", "bolt", "mic", "equalizer", "headphones",
     "timer", "queue_music", "playlist_play", "link", "tune", "circle",
+    # 局域网模式
+    "lan", "wifi_find", "link_off", "logout", "send", "person_add",
+    "sync_alt", "devices", "cell_tower", "cable",
 ]
 
 
