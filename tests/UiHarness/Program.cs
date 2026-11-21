@@ -48,6 +48,10 @@ internal static class Program
         AppPaths.EnsureDirectories();
         ThemeManager.Apply(AppThemeMode.Light);
 
+        // 自检的数据都放临时目录，不动用户真实的 %LOCALAPPDATA%\ALambdaTTS
+        Environment.SetEnvironmentVariable("ALAMBDA_TTS_HOME", Path.Combine(_outputDir, "appdata"));
+        Directory.CreateDirectory(Path.Combine(_outputDir, "appdata"));
+
         var downloadDir = Path.Combine(_outputDir, "downloads");
         Directory.CreateDirectory(downloadDir);
         foreach (var old in Directory.GetFiles(downloadDir)) File.Delete(old);
@@ -414,7 +418,7 @@ internal static class Program
         lanButton!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Pump(400);
         var lanOverlay = (Grid)window.FindName("LanOverlay")!;
-        var lanPanel = (FrameworkElement)window.FindName("LanPanel")!;
+        var lanPanel = (ALambdaTTS.Views.LanPanelView)window.FindName("LanPanel")!;
         Check("局域网面板能打开", lanOverlay.Visibility == Visibility.Visible);
 
         var nameBox = lanPanel.FindName("NameBox") as TextBox;
@@ -539,10 +543,62 @@ internal static class Program
         Check("远端消息带着对端的语调", remoteItem is { Pitch: 10 }, "Pitch=" + remoteItem?.Pitch);
         Check("远端消息开始播放", remoteItem?.IsPlaying == true);
 
+        Console.WriteLine("== 记住连接 ==");
+        Check("配对后记住了对端地址",
+            !string.IsNullOrWhiteSpace(settings.LanPeerHost) && settings.LanPeerPort >= 1024,
+            $"{settings.LanPeerHost}:{settings.LanPeerPort}");
+        Check("配对后记住了对端名字", settings.LanPeerName == "电脑 B", settings.LanPeerName);
+        Check("自动连接默认开启", settings.LanAutoConnect);
+
+        var reconnectButton = lanPanel.FindName("ReconnectButton") as Button;
+        var forgetButton = lanPanel.FindName("ForgetButton") as Button;
+        Pump(200);
+        Check("面板出现「连接上次」按钮", reconnectButton?.Visibility == Visibility.Visible);
+        Check("按钮上带着对端名字",
+            (reconnectButton?.Content as string ?? string.Empty).Contains("电脑 B", StringComparison.Ordinal),
+            reconnectButton?.Content as string);
+
+        forgetButton!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Pump(250);
+        Check("点忘记后设置里的地址被清空",
+            string.IsNullOrWhiteSpace(settings.LanPeerHost) && string.IsNullOrWhiteSpace(settings.LanPeerName));
+        Check("点忘记后按钮消失", reconnectButton.Visibility != Visibility.Visible);
+        Check("状态栏提示已忘记", status!.Text.Contains("忘记", StringComparison.Ordinal), status.Text);
+
+        Console.WriteLine("== 点设备行直接配对 ==");
+        var peerRowService = new LanService();
+        peerRowService.Start("电脑 C", 45803, codeBox!.Text);
+        Pump(300);
+        lanPanel.AddPeer(new LanPeer("row-test", "电脑 C", "127.0.0.1", 45803));
+        Pump(300);
+
+        var peerListBox = lanPanel.FindName("PeerList") as ListBox;
+        Check("设备出现在列表里", peerListBox?.Items.Count == 1, peerListBox?.Items.Count.ToString());
+        var peerContainer = peerListBox is null
+            ? null
+            : peerListBox.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
+        var rowButton = peerContainer is null ? null : FindInTree<Button>(peerContainer, "RowButton");
+        if (rowButton is null && peerContainer is not null)
+        {
+            // 行按钮没有 x:Name，退而求其次：取容器里第一个 Button
+            rowButton = Descendants<Button>(peerContainer).FirstOrDefault();
+        }
+
+        Check("设备行是按钮（可点）", rowButton is not null);
+        rowButton!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check("点一下设备行就配对成功",
+            PumpUntil(() => window.IsLanConnected && peerRowService.IsConnected, 12000),
+            "未连接");
+        Check("配对后记住的是这台设备", settings.LanPeerPort == 45803, settings.LanPeerPort.ToString());
+
+        peerRowService.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        Pump(400);
+        Check("对端关闭后回到未连接", PumpUntil(() => !window.IsLanConnected, 5000));
+
         enableToggle.IsChecked = false;
         enableToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-        Pump(500);
-        Check("关掉开关后不再监听", !window.IsLanListening);
+        Check("关掉开关后不再监听", PumpUntil(() => !window.IsLanListening, 4000),
+            window.IsLanListening ? "还在监听" : "已停");
 
         lanButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Pump(300);
@@ -633,6 +689,24 @@ internal static class Program
 
         app.Shutdown();
         return _failures == 0 ? 0 : 1;
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T typed)
+            {
+                yield return typed;
+            }
+
+            foreach (var nested in Descendants<T>(child))
+            {
+                yield return nested;
+            }
+        }
     }
 
     private static T? Find<T>(FrameworkElement root, string name)

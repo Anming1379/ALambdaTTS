@@ -13,6 +13,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="{x:Static themes:IconGlyphs.Lan}" Style="{StaticResource IconText}"
@@ -20,7 +21,9 @@
                     <TextBlock x:Name="StatusText" Text="未启用" FontSize="12"
                                Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                 </StackPanel>
-                <ToggleButton x:Name="EnableToggle" Grid.Column="1" Style="{StaticResource ChipToggle}"
+                <ToggleButton x:Name="AutoToggle" Grid.Column="1" Style="{StaticResource ChipToggle}"
+                              Content="自动连接" Click="AutoToggle_Click" Margin="0,0,6,0" />
+                <ToggleButton x:Name="EnableToggle" Grid.Column="2" Style="{StaticResource ChipToggle}"
                               Content="启用局域网" Click="EnableToggle_Click" />
             </Grid>
 
@@ -47,7 +50,7 @@
                 </StackPanel>
             </Grid>
 
-            <!-- 发现 / 手动连接 -->
+            <!-- 手动 IP 直连 -->
             <Grid Margin="0,10,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -67,30 +70,41 @@
                         Height="28" Padding="10,0" Margin="6,0,0,0" Click="Connect_Click" />
             </Grid>
 
-            <!-- 发现的设备 -->
+            <!-- 发现的设备（整行可点，点一下就连） -->
             <Grid Margin="0,10,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="局域网里的设备" FontSize="10.5" Foreground="{DynamicResource TextMuted}"
-                           VerticalAlignment="Center" />
+                <TextBlock Text="局域网里的设备（点一下直接配对）" FontSize="10.5"
+                           Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                 <Button Grid.Column="1" Style="{StaticResource GhostButton}" Content="发现"
                         Height="26" Padding="10,0" Click="Discover_Click" />
-                <Button Grid.Column="2" Style="{StaticResource AccentButton}" Content="配对"
-                        Height="26" Padding="12,0" Margin="6,0,0,0" Click="Pair_Click" />
             </Grid>
 
-            <Border Background="{DynamicResource SurfaceAlt}" BorderThickness="0" Margin="0,6,0,0" MinHeight="86">
+            <Border Background="{DynamicResource SurfaceAlt}" BorderThickness="0" Margin="0,6,0,0" MinHeight="72">
                 <ListBox x:Name="PeerList" Background="Transparent" BorderThickness="0"
-                         MaxHeight="132" ItemContainerStyle="{StaticResource VoiceListItem}">
+                         MaxHeight="132" ItemContainerStyle="{StaticResource PeerListItem}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="2,5">
-                                <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="{DynamicResource Text}" />
-                                <TextBlock Text="{Binding Host}" FontSize="10.5" Foreground="{DynamicResource TextMuted}" />
-                            </StackPanel>
+                            <Button Style="{StaticResource PeerRowButton}" Click="PeerRow_Click">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="{Binding Name}" FontSize="12.5"
+                                                   Foreground="{DynamicResource Text}" />
+                                        <TextBlock Text="{Binding Host}" FontSize="10.5"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{x:Static themes:IconGlyphs.Link}"
+                                               Style="{StaticResource IconText}" FontSize="16"
+                                               Foreground="{DynamicResource Accent}" VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
@@ -98,20 +112,28 @@
             <TextBlock x:Name="EmptyPeerHint" Text="点「发现」搜一下，或者直接填对方的 IP"
                        FontSize="10.5" Foreground="{DynamicResource TextFaint}" Margin="2,4,0,0" />
 
-            <!-- 已连接时显示断开 -->
+            <!-- 上次连接 / 断开 -->
             <Grid Margin="0,10,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="PeerText" Text="还没有配对" FontSize="11"
                            Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
-                <Button x:Name="DisconnectButton" Grid.Column="1" Style="{StaticResource GhostButton}"
-                        Content="断开" Height="26" Padding="12,0" Click="Disconnect_Click" />
+                <Button x:Name="ReconnectButton" Grid.Column="1" Style="{StaticResource GhostButton}"
+                        Content="连接上次" Height="26" Padding="10,0" Margin="6,0,0,0"
+                        Click="Reconnect_Click" Visibility="Collapsed" />
+                <Button x:Name="ForgetButton" Grid.Column="2" Style="{StaticResource GhostButton}"
+                        Content="忘记" Height="26" Padding="10,0" Margin="6,0,0,0"
+                        Click="Forget_Click" Visibility="Collapsed" />
+                <Button x:Name="DisconnectButton" Grid.Column="3" Style="{StaticResource GhostButton}"
+                        Content="断开" Height="26" Padding="12,0" Margin="6,0,0,0" Click="Disconnect_Click" />
             </Grid>
 
-            <TextBlock Text="两台电脑都要开启本模式并填同一个配对码。Radmin VPN 这类虚拟局域网也能用，广播不通时用「直接连接」填对方 IP。"
+            <TextBlock Text="两台电脑都要开启本模式并填同一个配对码。Radmin VPN 这类虚拟局域网也能用，广播不通时用「直接连接」填对方 IP。配对过的对端会被记住，下次启动自动连回去。"
                        FontSize="10.5" Foreground="{DynamicResource TextFaint}" TextWrapping="Wrap"
                        LineHeight="16" Margin="0,10,0,0" />
         </StackPanel>

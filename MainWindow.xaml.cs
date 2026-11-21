@@ -73,9 +73,20 @@ public partial class MainWindow : Window
         LanPanel.PairRequested += LanPanel_PairRequested;
         LanPanel.ManualPairRequested += LanPanel_ManualPairRequested;
         LanPanel.DisconnectRequested += LanPanel_DisconnectRequested;
+        LanPanel.ReconnectRequested += LanPanel_ReconnectRequested;
+        LanPanel.ForgetRequested += LanPanel_ForgetRequested;
         LanPanel.CloseRequested += (_, _) => CloseLanPanel();
 
-        _lan.StatusChanged += (_, status) => OnUi(() => LanPanel.SetStatus(status));
+        _lan.StatusChanged += (_, status) => OnUi(() =>
+        {
+            LanPanel.SetStatus(status);
+            UpdateLanButton();
+
+            if (status.State == LanState.Connected && status.Peer is { } peer)
+            {
+                RememberPeer(peer);
+            }
+        });
         _lan.PeerDiscovered += (_, peer) => OnUi(() => LanPanel.AddPeer(peer));
         _lan.MessageReceived += (_, message) => OnUi(() => OnLanMessage(message));
 
@@ -110,6 +121,10 @@ public partial class MainWindow : Window
         if (_settings.LanEnabled)
         {
             StartLan();
+            if (_settings.LanAutoConnect && !string.IsNullOrWhiteSpace(_settings.LanPeerHost))
+            {
+                _ = PairWithAsync(_settings.LanPeerHost!, _settings.LanPeerPort, announce: false);
+            }
         }
     }
 
@@ -319,6 +334,7 @@ public partial class MainWindow : Window
         CloseVoicePanel();
         EnsurePairCode();
         LanPanel.Load(BuildLanValues(), _settings.LanPeerName, _lan.IsConnected);
+        LanPanel.SetRemembered(_settings.LanPeerHost, _settings.LanPeerPort, _settings.LanPeerName);
         LanPanel.SetStatus(new LanStatus(
             _lan.State,
             _lan.State == LanState.Stopped ? "未启用" : "等待配对",
@@ -346,7 +362,9 @@ public partial class MainWindow : Window
         LocalDeviceName,
         _settings.LanPairCode ?? string.Empty,
         _settings.LanPort,
-        _settings.LanPeerHost);
+        _settings.LanPeerHost,
+        _settings.LanAutoConnect,
+        _settings.LanPeerName);
 
     private void EnsurePairCode()
     {
@@ -375,6 +393,7 @@ public partial class MainWindow : Window
         _settings.LanPairCode = values.PairCode;
         _settings.LanPort = values.Port;
         _settings.LanEnabled = values.Enabled;
+        _settings.LanAutoConnect = values.AutoConnect;
 
         if (disabling)
         {
@@ -387,6 +406,10 @@ public partial class MainWindow : Window
             if (enabling)
             {
                 StatusText.Text = $"局域网已开启，配对码 {values.PairCode}";
+                if (_settings.LanAutoConnect && !string.IsNullOrWhiteSpace(_settings.LanPeerHost))
+                {
+                    _ = PairWithAsync(_settings.LanPeerHost!, _settings.LanPeerPort, announce: false);
+                }
             }
         }
 
@@ -447,6 +470,33 @@ public partial class MainWindow : Window
         return paired;
     }
 
+    /// <summary>把对端记下来（两边都会记，下次启动直接连回去）。</summary>
+    private void RememberPeer(LanPeer peer)
+    {
+        if (string.IsNullOrWhiteSpace(peer.Host))
+        {
+            return;
+        }
+
+        _settings.LanPeerHost = peer.Host;
+        _settings.LanPeerPort = peer.Port;
+        _settings.LanPeerName = peer.Name;
+        SettingsStore.Save(_settings);
+        LanPanel.SetRemembered(peer.Host, peer.Port, peer.Name);
+    }
+
+    private async void LanPanel_ReconnectRequested(object? sender, LanManualTarget target)
+        => await PairWithAsync(target.Host, target.Port, announce: true);
+
+    private void LanPanel_ForgetRequested(object? sender, EventArgs e)
+    {
+        _settings.LanPeerHost = null;
+        _settings.LanPeerPort = Services.Lan.LanService.DefaultPort;
+        _settings.LanPeerName = null;
+        SettingsStore.Save(_settings);
+        StatusText.Text = "已忘记上次的对端";
+    }
+
     private async void LanPanel_DisconnectRequested(object? sender, EventArgs e)
     {
         await _lan.DisconnectAsync();
@@ -458,7 +508,8 @@ public partial class MainWindow : Window
     /// <summary>断了就悄悄重连，不刷状态栏。</summary>
     private async void LanTimer_Tick(object? sender, EventArgs e)
     {
-        if (!_settings.LanEnabled || _lan.IsConnected || _lan.State != LanState.Listening)
+        if (!_settings.LanEnabled || !_settings.LanAutoConnect || _lan.IsConnected
+            || _lan.State != LanState.Listening)
         {
             return;
         }

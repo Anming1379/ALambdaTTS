@@ -6,9 +6,24 @@ namespace ALambdaTTS.Services;
 /// <summary>应用目录与文件名工具。</summary>
 public static class AppPaths
 {
-    public static string Root { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "ALambdaTTS");
+    /// <summary>
+    /// 数据根目录：默认 %LOCALAPPDATA%\ALambdaTTS。
+    /// 设置 ALAMBDA_TTS_HOME 可以改到别处（自检用，免得污染真实配置）。
+    /// </summary>
+    public static string Root { get; } = ResolveRoot();
+
+    private static string ResolveRoot()
+    {
+        var overridden = Environment.GetEnvironmentVariable("ALAMBDA_TTS_HOME");
+        if (!string.IsNullOrWhiteSpace(overridden))
+        {
+            return Path.GetFullPath(overridden.Trim());
+        }
+
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ALambdaTTS");
+    }
 
     /// <summary>本次会话的语音缓存：退出程序即清空。</summary>
     public static string CacheDir { get; } = Path.Combine(Root, "cache");

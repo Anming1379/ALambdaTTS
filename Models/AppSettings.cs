@@ -59,6 +59,9 @@ public sealed class AppSettings
 
     public int LanPeerPort { get; set; } = 45790;
 
+    /// <summary>启动后自动连接上次的对端。</summary>
+    public bool LanAutoConnect { get; set; } = true;
+
     public double WindowWidth { get; set; } = 600;
 
     public double WindowHeight { get; set; } = 760;

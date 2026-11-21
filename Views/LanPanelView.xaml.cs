@@ -6,11 +6,14 @@ using ALambdaTTS.Services.Lan;
 
 namespace ALambdaTTS.Views;
 
-/// <summary>局域网面板：开关、本机名、配对码、发现设备、手动连接、断开。</summary>
+/// <summary>局域网面板：开关、本机名、配对码、发现设备（点一下就配对）、上次连接、断开。</summary>
 public partial class LanPanelView : UserControl
 {
     private readonly ObservableCollection<LanPeer> _peers = new();
     private bool _suppress;
+    private string? _rememberedHost;
+    private string? _rememberedName;
+    private int _rememberedPort = LanService.DefaultPort;
 
     public LanPanelView()
     {
@@ -19,17 +22,23 @@ public partial class LanPanelView : UserControl
         RefreshPeerHint();
     }
 
-    /// <summary>开关 / 名称 / 配对码改了。</summary>
+    /// <summary>开关 / 名称 / 配对码 / 自动连接 改了。</summary>
     public event EventHandler<LanPanelValues>? ValuesChanged;
 
     /// <summary>点了「发现」。</summary>
     public event EventHandler? DiscoverRequested;
 
-    /// <summary>点了「配对」（选中了某个发现到的设备）。</summary>
+    /// <summary>点了某台发现的设备（点一下就直接配对）。</summary>
     public event EventHandler<LanPeer>? PairRequested;
 
     /// <summary>点了「直接连接」。</summary>
     public event EventHandler<LanManualTarget>? ManualPairRequested;
+
+    /// <summary>点了「连接上次」。</summary>
+    public event EventHandler<LanManualTarget>? ReconnectRequested;
+
+    /// <summary>点了「忘记」。</summary>
+    public event EventHandler? ForgetRequested;
 
     /// <summary>点了「断开」。</summary>
     public event EventHandler? DisconnectRequested;
@@ -41,22 +50,27 @@ public partial class LanPanelView : UserControl
         EnableToggle.IsChecked == true,
         NameBox.Text.Trim(),
         CodeBox.Text.Trim(),
-        ParsePort(PortBox.Text));
+        ParsePort(PortBox.Text),
+        _rememberedHost,
+        AutoToggle.IsChecked == true);
 
     /// <summary>把设置填进控件（打开面板时调用）。</summary>
     public void Load(LanPanelValues values, string? peerName, bool connected)
     {
         _suppress = true;
         EnableToggle.IsChecked = values.Enabled;
+        AutoToggle.IsChecked = values.AutoConnect;
         NameBox.Text = values.DeviceName;
         CodeBox.Text = values.PairCode;
         PortBox.Text = values.Port.ToString();
-        if (string.IsNullOrWhiteSpace(HostBox.Text))
+        _suppress = false;
+
+        SetRemembered(values.RememberedHost, values.Port, values.RememberedName);
+        if (string.IsNullOrWhiteSpace(HostBox.Text) && !string.IsNullOrWhiteSpace(values.RememberedHost))
         {
-            HostBox.Text = values.LastHost ?? string.Empty;
+            HostBox.Text = values.RememberedHost!;
         }
 
-        _suppress = false;
         SetPeer(peerName, connected);
         RefreshPeerHint();
     }
@@ -99,12 +113,46 @@ public partial class LanPanelView : UserControl
             ? "当前连接：" + peerName
             : "还没有配对";
         DisconnectButton.IsEnabled = connected;
+        UpdateRememberedRow(connected);
+    }
+
+    /// <summary>记住的对端（配对成功或启动时从设置里恢复）。</summary>
+    public void SetRemembered(string? host, int port, string? name)
+    {
+        _rememberedHost = string.IsNullOrWhiteSpace(host) ? null : host.Trim();
+        _rememberedPort = port is >= 1024 and <= 65535 ? port : LanService.DefaultPort;
+        _rememberedName = name;
+        UpdateRememberedRow(DisconnectButton.IsEnabled);
     }
 
     public void FocusName()
     {
         NameBox.Focus();
         NameBox.SelectAll();
+    }
+
+    private void UpdateRememberedRow(bool connected)
+    {
+        var hasRemembered = !string.IsNullOrWhiteSpace(_rememberedHost);
+
+        if (connected)
+        {
+            ReconnectButton.Visibility = Visibility.Collapsed;
+            ForgetButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        ReconnectButton.Visibility = hasRemembered ? Visibility.Visible : Visibility.Collapsed;
+        ForgetButton.Visibility = hasRemembered ? Visibility.Visible : Visibility.Collapsed;
+        ReconnectButton.Content = hasRemembered && !string.IsNullOrWhiteSpace(_rememberedName)
+            ? $"连接 {_rememberedName}"
+            : "连接上次";
+        ReconnectButton.ToolTip = hasRemembered ? $"{_rememberedHost}:{_rememberedPort}" : null;
+
+        if (hasRemembered && string.IsNullOrWhiteSpace(PeerText.Text.Replace("还没有配对", string.Empty, StringComparison.Ordinal)))
+        {
+            PeerText.Text = $"上次连接：{_rememberedName ?? _rememberedHost}（{_rememberedHost}:{_rememberedPort}）";
+        }
     }
 
     private void RefreshPeerHint()
@@ -122,6 +170,8 @@ public partial class LanPanelView : UserControl
     }
 
     private void EnableToggle_Click(object sender, RoutedEventArgs e) => RaiseValues();
+
+    private void AutoToggle_Click(object sender, RoutedEventArgs e) => RaiseValues();
 
     private void NameBox_TextChanged(object sender, TextChangedEventArgs e) => RaiseValues();
 
@@ -142,15 +192,14 @@ public partial class LanPanelView : UserControl
         DiscoverRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    private void Pair_Click(object sender, RoutedEventArgs e)
+    /// <summary>整行就是按钮：点哪儿都能连。</summary>
+    private void PeerRow_Click(object sender, RoutedEventArgs e)
     {
-        if (PeerList.SelectedItem is LanPeer peer)
+        if ((sender as FrameworkElement)?.DataContext is LanPeer peer)
         {
+            StatusText.Text = $"正在连接 {peer.Name}…";
             PairRequested?.Invoke(this, peer);
-            return;
         }
-
-        StatusText.Text = "先在上面的列表里选一台设备";
     }
 
     private void Connect_Click(object sender, RoutedEventArgs e)
@@ -163,6 +212,21 @@ public partial class LanPanelView : UserControl
         }
 
         ManualPairRequested?.Invoke(this, new LanManualTarget(host, ParsePort(PortBox.Text)));
+    }
+
+    private void Reconnect_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_rememberedHost))
+        {
+            ReconnectRequested?.Invoke(this, new LanManualTarget(_rememberedHost!, _rememberedPort));
+        }
+    }
+
+    private void Forget_Click(object sender, RoutedEventArgs e)
+    {
+        SetRemembered(null, LanService.DefaultPort, null);
+        PeerText.Text = "还没有配对";
+        ForgetRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void Disconnect_Click(object sender, RoutedEventArgs e)
@@ -178,7 +242,9 @@ public sealed record LanPanelValues(
     string DeviceName,
     string PairCode,
     int Port,
-    string? LastHost = null);
+    string? RememberedHost,
+    bool AutoConnect,
+    string? RememberedName = null);
 
 /// <summary>手动连接目标。</summary>
 public sealed record LanManualTarget(string Host, int Port);
