@@ -52,7 +52,8 @@ public partial class LanPanelView : UserControl
         CodeBox.Text.Trim(),
         ParsePort(PortBox.Text),
         _rememberedHost,
-        AutoToggle.IsChecked == true);
+        AutoToggle.IsChecked == true,
+        MuteToggle.IsChecked == true);
 
     /// <summary>把设置填进控件（打开面板时调用）。</summary>
     public void Load(LanPanelValues values, string? peerName, bool connected)
@@ -60,6 +61,7 @@ public partial class LanPanelView : UserControl
         _suppress = true;
         EnableToggle.IsChecked = values.Enabled;
         AutoToggle.IsChecked = values.AutoConnect;
+        MuteToggle.IsChecked = values.MuteIncoming;
         NameBox.Text = values.DeviceName;
         CodeBox.Text = values.PairCode;
         PortBox.Text = values.Port.ToString();
@@ -173,6 +175,8 @@ public partial class LanPanelView : UserControl
 
     private void AutoToggle_Click(object sender, RoutedEventArgs e) => RaiseValues();
 
+    private void MuteToggle_Click(object sender, RoutedEventArgs e) => RaiseValues();
+
     private void NameBox_TextChanged(object sender, TextChangedEventArgs e) => RaiseValues();
 
     private void CodeBox_TextChanged(object sender, TextChangedEventArgs e) => RaiseValues();
@@ -244,6 +248,7 @@ public sealed record LanPanelValues(
     int Port,
     string? RememberedHost,
     bool AutoConnect,
+    bool MuteIncoming,
     string? RememberedName = null);
 
 /// <summary>手动连接目标。</summary>

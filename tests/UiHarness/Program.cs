@@ -559,6 +559,50 @@ internal static class Program
         Check("远端消息带着对端的语调", remoteItem is { Pitch: 10 }, "Pitch=" + remoteItem?.Pitch);
         Check("远端消息开始播放", remoteItem?.IsPlaying == true);
 
+        Console.WriteLine("== 静音对方 ==");
+        var muteToggle = (System.Windows.Controls.Primitives.ToggleButton)lanPanel.FindName("MuteToggle")!;
+        volume!.Value = 70;
+        muteToggle.IsChecked = true;
+        muteToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Pump(300);
+        Check("静音开关写进设置", settings.LanMuteIncoming);
+
+        var countBeforeMute = history.Items.Count;
+        window.OnLanMessage(new LanChatMessage(
+            "mute-1", "电脑 B", "静音测试。", "zh-CN-XiaoxiaoNeural", 0, 0, 100, DateTimeOffset.Now));
+        var mutedReady = PumpUntil(
+            () => history.Items.Count > countBeforeMute
+                  && history.Items[history.Items.Count - 1] is TtsItem { State: TtsState.Ready },
+            60000);
+        var mutedItem = history.Items.Count > countBeforeMute
+            ? history.Items[history.Items.Count - 1] as TtsItem
+            : null;
+
+        Check("静音时照样生成卡片", mutedReady, mutedItem?.StatusLabel);
+        Check("静音时不播放", mutedItem?.IsPlaying == false);
+        Check("远端消息用本机音量（不是对方的 100）", mutedItem is { Volume: 70 },
+            "Volume=" + mutedItem?.Volume);
+
+        muteToggle.IsChecked = false;
+        muteToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Pump(300);
+        Check("关掉静音后设置同步", !settings.LanMuteIncoming);
+
+        var countAfterMute = history.Items.Count;
+        window.OnLanMessage(new LanChatMessage(
+            "mute-2", "电脑 B", "取消静音测试。", "zh-CN-XiaoxiaoNeural", 0, 0, 100, DateTimeOffset.Now));
+        var unmutedReady = PumpUntil(
+            () => history.Items.Count > countAfterMute
+                  && history.Items[history.Items.Count - 1] is TtsItem { State: TtsState.Ready },
+            60000);
+        var unmutedItem = history.Items.Count > countAfterMute
+            ? history.Items[history.Items.Count - 1] as TtsItem
+            : null;
+
+        Check("取消静音后开始播放", unmutedReady && unmutedItem?.IsPlaying == true,
+            unmutedItem?.StatusLabel);
+        volume.Value = 100;
+
         Console.WriteLine("== 记住连接 ==");
         Check("配对后记住了对端地址",
             !string.IsNullOrWhiteSpace(settings.LanPeerHost) && settings.LanPeerPort >= 1024,

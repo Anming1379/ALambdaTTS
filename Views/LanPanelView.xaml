@@ -14,6 +14,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="{x:Static themes:IconGlyphs.Lan}" Style="{StaticResource IconText}"
@@ -21,9 +22,12 @@
                     <TextBlock x:Name="StatusText" Text="未启用" FontSize="12"
                                Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                 </StackPanel>
-                <ToggleButton x:Name="AutoToggle" Grid.Column="1" Style="{StaticResource ChipToggle}"
+                <ToggleButton x:Name="MuteToggle" Grid.Column="1" Style="{StaticResource ChipToggle}"
+                              Content="静音对方" Click="MuteToggle_Click" Margin="0,0,6,0"
+                              ToolTip="收到对方消息时只生成到历史记录，不自动播放" />
+                <ToggleButton x:Name="AutoToggle" Grid.Column="2" Style="{StaticResource ChipToggle}"
                               Content="自动连接" Click="AutoToggle_Click" Margin="0,0,6,0" />
-                <ToggleButton x:Name="EnableToggle" Grid.Column="2" Style="{StaticResource ChipToggle}"
+                <ToggleButton x:Name="EnableToggle" Grid.Column="3" Style="{StaticResource ChipToggle}"
                               Content="启用局域网" Click="EnableToggle_Click" />
             </Grid>
 

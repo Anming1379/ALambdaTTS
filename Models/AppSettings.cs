@@ -62,6 +62,9 @@ public sealed class AppSettings
     /// <summary>启动后自动连接上次的对端。</summary>
     public bool LanAutoConnect { get; set; } = true;
 
+    /// <summary>收到对方消息时只生成不播放（静音对方）。</summary>
+    public bool LanMuteIncoming { get; set; }
+
     public double WindowWidth { get; set; } = 600;
 
     public double WindowHeight { get; set; } = 760;

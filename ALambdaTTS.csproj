@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>ALambdaTTS</RootNamespace>
     <AssemblyName>ALambdaTTS</AssemblyName>
-    <Version>1.1.2</Version>
+    <Version>1.1.3</Version>
     <Product>ALambda TTS</Product>
     <Company>Anming_cat</Company>
     <Authors>Anming_cat</Authors>

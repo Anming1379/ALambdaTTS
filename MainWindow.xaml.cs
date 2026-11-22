@@ -366,6 +366,7 @@ public partial class MainWindow : Window
         _settings.LanPort,
         _settings.LanPeerHost,
         _settings.LanAutoConnect,
+        _settings.LanMuteIncoming,
         _settings.LanPeerName);
 
     private void EnsurePairCode()
@@ -396,6 +397,7 @@ public partial class MainWindow : Window
         _settings.LanPort = values.Port;
         _settings.LanEnabled = values.Enabled;
         _settings.LanAutoConnect = values.AutoConnect;
+        _settings.LanMuteIncoming = values.MuteIncoming;
 
         if (disabling)
         {
@@ -587,19 +589,21 @@ public partial class MainWindow : Window
 
                 var message = _remoteQueue.Dequeue();
                 var voice = _catalog.Find(message.Voice ?? string.Empty) ?? _voice;
+
+                // 播放音量听本机的：对端调多大都影响不到这边，本机 0 就是静音
                 var item = new TtsItem(
                     message.Text,
                     voice,
                     message.Rate,
                     message.Pitch,
-                    message.Volume,
+                    (int)VolumeKnob.Value,
                     $"来自 {message.FromName}");
 
                 _items.Add(item);
                 ScrollToEnd();
                 StatusText.Text = $"收到 {message.FromName} 的消息，正在合成…";
 
-                await RunSynthesisAsync(item, clearInput: false);
+                await RunSynthesisAsync(item, clearInput: false, autoPlay: !_settings.LanMuteIncoming);
             }
         }
         finally
@@ -700,7 +704,7 @@ public partial class MainWindow : Window
         _ = RunSynthesisAsync(item, clearInput: false);
     }
 
-    private async Task RunSynthesisAsync(TtsItem item, bool clearInput)
+    private async Task RunSynthesisAsync(TtsItem item, bool clearInput, bool autoPlay = true)
     {
         _cts = new CancellationTokenSource();
         SetBusy(true);
@@ -762,7 +766,14 @@ public partial class MainWindow : Window
                 InputBox.Clear();
             }
 
-            StartPlayback(item);
+            if (autoPlay)
+            {
+                StartPlayback(item);
+            }
+            else
+            {
+                StatusText.Text = "已生成，静音模式没有播放";
+            }
         }
         catch (OperationCanceledException)
         {
