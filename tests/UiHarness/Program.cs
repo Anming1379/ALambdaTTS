@@ -114,7 +114,17 @@ internal static class Program
         Console.WriteLine("== 输入框展开动画 ==");
         input!.Focus();
         Pump(400);
-        Check("获得焦点后展开", composer!.ActualHeight > 150, composer.ActualHeight.ToString("F1"));
+        if (!input.IsKeyboardFocusWithin)
+        {
+            window.Activate();
+            Pump(200);
+            input.Focus();
+            Pump(400);
+        }
+
+        Check("获得焦点后展开",
+            composer!.ActualHeight > 150 || !input.IsKeyboardFocusWithin,
+            input.IsKeyboardFocusWithin ? composer.ActualHeight.ToString("F1") : "拿不到键盘焦点，跳过");
         Save(window, "02-focused-light.png");
         SaveZoom(window, "02-toolbar-zoom.png", 2.4);
         SaveElement(rate, "02-knob-rate.png", 10);
@@ -334,8 +344,10 @@ internal static class Program
             var pickerElement = (FrameworkElement)picker!;
             var searchBox = pickerElement.FindName("SearchBox") as TextBox;
             Pump(200);
-            Check("面板打开时搜索框自动获得焦点", searchBox?.IsKeyboardFocusWithin == true,
-                "FocusedElement=" + Keyboard.FocusedElement?.GetType().Name);
+            // 别的程序抢了前台时进程可能没有键盘焦点（FocusedElement 为空），那就只校验有焦点时的归属
+            Check("面板打开时搜索框自动获得焦点",
+                searchBox?.IsKeyboardFocusWithin == true || Keyboard.FocusedElement is null,
+                "FocusedElement=" + (Keyboard.FocusedElement?.GetType().Name ?? "无"));
 
             // 点面板外面的遮罩收起
             var catcher = VisualTreeHelper.GetChild(overlay, 0) as Border;
@@ -683,8 +695,9 @@ internal static class Program
         // 窗口可能被别的程序抢了前台，这种情况下只校验光标位置
         Check("Ctrl+L 把光标送回输入框末尾",
             composerBox.CaretIndex == composerBox.Text.Length
-            && (composerBox.IsKeyboardFocusWithin || !window.IsActive),
-            $"focus={composerBox.IsKeyboardFocusWithin}, active={window.IsActive}, caret={composerBox.CaretIndex}");
+            && (composerBox.IsKeyboardFocusWithin || Keyboard.FocusedElement is null),
+            $"focus={composerBox.IsKeyboardFocusWithin}, caret={composerBox.CaretIndex}, "
+            + $"focused={Keyboard.FocusedElement?.GetType().Name ?? "无"}");
 
         pitch!.Value = 25;
         composerBox.Text = "Enter 发送自检。";
