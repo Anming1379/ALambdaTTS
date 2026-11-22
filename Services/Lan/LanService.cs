@@ -313,7 +313,6 @@ public sealed class LanService : IAsyncDisposable
             Voice = message.Voice,
             Rate = message.Rate,
             Pitch = message.Pitch,
-            Volume = message.Volume,
             SentAt = message.SentAt.ToUnixTimeMilliseconds(),
             Port = Port,
         };
@@ -499,7 +498,6 @@ public sealed class LanService : IAsyncDisposable
             frame.Voice,
             frame.Rate,
             frame.Pitch,
-            Math.Clamp(frame.Volume, 0, 100),
             frame.SentAt > 0
                 ? DateTimeOffset.FromUnixTimeMilliseconds(frame.SentAt)
                 : DateTimeOffset.Now);

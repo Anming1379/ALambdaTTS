@@ -5,7 +5,7 @@
 #       powershell ... -File .\build-installer.ps1 -Version 1.0.1
 
 param(
-    [string]$Version = '1.1.3',
+    [string]$Version = '1.1.4',
     [string]$Configuration = 'Release'
 )
 

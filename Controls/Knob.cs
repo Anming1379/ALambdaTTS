@@ -20,6 +20,9 @@ public sealed class Knob : Control
     private double _dragStartValue;
     private double _dragStartY;
 
+    /// <summary>值变化（滚轮 / 拖动 / 双击复位 / 代码赋值都会触发）。</summary>
+    public event EventHandler<double>? ValueChanged;
+
     public static readonly DependencyProperty ValueProperty = DependencyProperty.Register(
         nameof(Value),
         typeof(double),
@@ -129,7 +132,9 @@ public sealed class Knob : Control
 
     private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        ((Knob)d).InvalidateVisual();
+        var knob = (Knob)d;
+        knob.InvalidateVisual();
+        knob.ValueChanged?.Invoke(knob, (double)e.NewValue);
     }
 
     protected override void OnRender(DrawingContext drawingContext)

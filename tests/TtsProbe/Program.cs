@@ -301,7 +301,7 @@ try
     Check("B 侧也认为已连接", await WaitUntil(() => peerB.IsConnected, 3000));
 
     var sent = await peerA.SendAsync(new LanChatMessage(
-        "m1", "电脑 A", "你好，电脑 B", "zh-CN-XiaoxiaoNeural", 0, 10, 100, DateTimeOffset.Now));
+        "m1", "电脑 A", "你好，电脑 B", "zh-CN-XiaoxiaoNeural", 0, 10, DateTimeOffset.Now));
     Check("发送消息成功", sent);
     Check("对端收到消息", await WaitUntil(() => { lock (received) { return received.Count >= 1; } }, 3000));
     lock (received)
@@ -311,6 +311,8 @@ try
         Check("对端知道消息来自电脑 A", received.Count >= 1 && received[0].FromName == "电脑 A");
         Check("音色与语调参数一起传过去",
             received.Count >= 1 && received[0].Voice == "zh-CN-XiaoxiaoNeural" && received[0].Pitch == 10);
+        Check("消息里不再携带音量字段",
+            !typeof(LanChatMessage).GetProperties().Any(p => p.Name == "Volume"));
     }
 
     var intruder = new LanService();

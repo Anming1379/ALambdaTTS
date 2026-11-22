@@ -53,6 +53,8 @@ public partial class MainWindow : Window
         RateKnob.Value = Math.Clamp(settings.Rate, -50, 100);
         PitchKnob.Value = Math.Clamp(settings.Pitch, -50, 50);
         VolumeKnob.Value = Math.Clamp(settings.Volume, 0, 100);
+        _player.Volume = VolumeKnob.Value / 100.0;
+        VolumeKnob.ValueChanged += (_, value) => _player.Volume = value / 100.0;
 
         _player.PlayingChanged += Player_PlayingChanged;
         _player.DurationResolved += Player_DurationResolved;
@@ -319,6 +321,9 @@ public partial class MainWindow : Window
 
     /// <summary>当前是否已和另一台电脑配对成功（自检用）。</summary>
     public bool IsLanConnected => _lan.IsConnected;
+
+    /// <summary>播放器的全局音量 0~1（自检用）。</summary>
+    public double PlayerVolume => _player.Volume;
 
     private void LanButton_Click(object sender, RoutedEventArgs e)
     {
@@ -590,13 +595,12 @@ public partial class MainWindow : Window
                 var message = _remoteQueue.Dequeue();
                 var voice = _catalog.Find(message.Voice ?? string.Empty) ?? _voice;
 
-                // 播放音量听本机的：对端调多大都影响不到这边，本机 0 就是静音
+                // 音量不进合成参数，由播放器的全局音量统一管
                 var item = new TtsItem(
                     message.Text,
                     voice,
                     message.Rate,
                     message.Pitch,
-                    (int)VolumeKnob.Value,
                     $"来自 {message.FromName}");
 
                 _items.Add(item);
@@ -621,7 +625,6 @@ public partial class MainWindow : Window
             _voice.ShortName,
             (int)RateKnob.Value,
             (int)PitchKnob.Value,
-            (int)VolumeKnob.Value,
             DateTimeOffset.Now);
 
         if (!await _lan.SendAsync(message))
@@ -662,7 +665,6 @@ public partial class MainWindow : Window
             _voice,
             (int)RateKnob.Value,
             (int)PitchKnob.Value,
-            (int)VolumeKnob.Value,
             lanConnected ? $"由 {LocalDeviceName} 发送" : null);
 
         _items.Add(item);
@@ -746,7 +748,7 @@ public partial class MainWindow : Window
                 item.Voice.ShortName,
                 item.Rate,
                 item.Pitch,
-                item.Volume,
+                100,
                 AppPaths.CacheDir,
                 progress,
                 _cts.Token);

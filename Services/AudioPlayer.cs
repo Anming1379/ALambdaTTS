@@ -23,6 +23,16 @@ public sealed class AudioPlayer : IDisposable
 
     public bool IsPlaying { get; private set; }
 
+    /// <summary>
+    /// 软件全局音量（0~1）。直接作用在 MediaPlayer 上，
+    /// 拖动旋钮对正在播的那一段也立刻生效，不用重新合成。
+    /// </summary>
+    public double Volume
+    {
+        get => _player.Volume;
+        set => _player.Volume = Math.Clamp(value, 0, 1);
+    }
+
     /// <summary>播放状态变化（true = 正在播放）。</summary>
     public event EventHandler<bool>? PlayingChanged;
 

@@ -27,14 +27,12 @@ public sealed class TtsItem : INotifyPropertyChanged
         VoiceEntry voice,
         int rate,
         int pitch,
-        int volume,
         string? originLabel = null)
     {
         Text = text;
         Voice = voice;
         Rate = rate;
         Pitch = pitch;
-        Volume = volume;
         OriginLabel = originLabel;
         Preview = BuildPreview(text);
     }
@@ -58,8 +56,6 @@ public sealed class TtsItem : INotifyPropertyChanged
 
     /// <summary>语调：相对原音高的偏移（Hz）。</summary>
     public int Pitch { get; }
-
-    public int Volume { get; }
 
     public List<string> Files { get; } = new();
 
@@ -178,11 +174,6 @@ public sealed class TtsItem : INotifyPropertyChanged
             if (Pitch != 0)
             {
                 parts.Add($"语调 {Pitch:+0;-0}Hz");
-            }
-
-            if (Volume != 100)
-            {
-                parts.Add($"音量 {Volume}%");
             }
 
             if (State == TtsState.Ready && Duration > TimeSpan.Zero)

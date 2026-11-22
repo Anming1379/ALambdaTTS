@@ -246,8 +246,7 @@ internal static class Program
             new VoiceEntry("zh-CN-XiaoxiaoNeural", "Xiaoxiao", "Female", "zh-CN",
                 "中文（中国大陆）", new[] { "News" }, Array.Empty<string>()),
             0,
-            0,
-            100)
+            0)
         {
             State = TtsState.Failed,
             ErrorMessage = "网络连接被中断（已重试 3 次）",
@@ -472,7 +471,6 @@ internal static class Program
             "zh-CN-XiaoxiaoNeural",
             0,
             -5,
-            100,
             DateTimeOffset.Now));
         PumpUntil(() => sendTask.IsCompleted, 5000);
         Check("对端消息发送成功", sendTask.IsCompleted && sendTask.Result);
@@ -540,7 +538,6 @@ internal static class Program
             "zh-CN-XiaoxiaoNeural",
             0,
             10,
-            100,
             DateTimeOffset.Now));
 
         var remoteReady = PumpUntil(
@@ -569,7 +566,7 @@ internal static class Program
 
         var countBeforeMute = history.Items.Count;
         window.OnLanMessage(new LanChatMessage(
-            "mute-1", "电脑 B", "静音测试。", "zh-CN-XiaoxiaoNeural", 0, 0, 100, DateTimeOffset.Now));
+            "mute-1", "电脑 B", "静音测试。", "zh-CN-XiaoxiaoNeural", 0, 0, DateTimeOffset.Now));
         var mutedReady = PumpUntil(
             () => history.Items.Count > countBeforeMute
                   && history.Items[history.Items.Count - 1] is TtsItem { State: TtsState.Ready },
@@ -580,8 +577,8 @@ internal static class Program
 
         Check("静音时照样生成卡片", mutedReady, mutedItem?.StatusLabel);
         Check("静音时不播放", mutedItem?.IsPlaying == false);
-        Check("远端消息用本机音量（不是对方的 100）", mutedItem is { Volume: 70 },
-            "Volume=" + mutedItem?.Volume);
+        Check("远端消息也走全局音量", Math.Abs(window.PlayerVolume - 0.7) < 0.01,
+            window.PlayerVolume.ToString("F2"));
 
         muteToggle.IsChecked = false;
         muteToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
@@ -590,7 +587,7 @@ internal static class Program
 
         var countAfterMute = history.Items.Count;
         window.OnLanMessage(new LanChatMessage(
-            "mute-2", "电脑 B", "取消静音测试。", "zh-CN-XiaoxiaoNeural", 0, 0, 100, DateTimeOffset.Now));
+            "mute-2", "电脑 B", "取消静音测试。", "zh-CN-XiaoxiaoNeural", 0, 0, DateTimeOffset.Now));
         var unmutedReady = PumpUntil(
             () => history.Items.Count > countAfterMute
                   && history.Items[history.Items.Count - 1] is TtsItem { State: TtsState.Ready },
@@ -699,21 +696,16 @@ internal static class Program
         Check("语调随请求一起提交", shortcutItem is { Pitch: 25 }, "Pitch=" + shortcutItem?.Pitch);
         pitch.Value = 0;
         volume!.Value = 70;
-        composerBox.Text = "音量参数自检。";
-        Pump(150);
-        composerBox.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window)!, 0, Key.Enter)
-        {
-            RoutedEvent = Keyboard.PreviewKeyDownEvent,
-        });
-        var volumeSent = PumpUntil(
-            () => history.Items.Count > 0
-                  && history.Items[history.Items.Count - 1] is TtsItem { State: TtsState.Ready, Volume: 70 },
-            60000);
-        var volumeItem = history.Items.Count > 0 ? history.Items[history.Items.Count - 1] as TtsItem : null;
-        Check("音量随请求一起提交", volumeSent, "Volume=" + volumeItem?.Volume);
-        Check("卡片小字显示音量", volumeItem?.MetaText.Contains("音量 70%", StringComparison.Ordinal) == true,
-            volumeItem?.MetaText);
+        Pump(200);
+        Check("音量旋钮控制播放器全局音量", Math.Abs(window.PlayerVolume - 0.7) < 0.01,
+            window.PlayerVolume.ToString("F2"));
+        Check("卡片小字不再写音量",
+            shortcutItem is not null && !shortcutItem.MetaText.Contains("音量", StringComparison.Ordinal),
+            shortcutItem?.MetaText);
         volume.Value = 100;
+        Pump(150);
+        Check("音量拉满回到 1.0", Math.Abs(window.PlayerVolume - 1.0) < 0.01,
+            window.PlayerVolume.ToString("F2"));
 
         Console.WriteLine("== 设置窗口 ==");
         var settingsWindow = new ALambdaTTS.Views.SettingsWindow(settings) { Owner = window };

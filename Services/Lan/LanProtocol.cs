@@ -34,8 +34,6 @@ public sealed class LanFrame
 
     public int Pitch { get; set; }
 
-    public int Volume { get; set; } = 100;
-
     public long SentAt { get; set; }
 
     /// <summary>监听端口（发现报文里告诉对方连哪）。</summary>
@@ -142,7 +140,6 @@ public sealed record LanChatMessage(
     string? Voice,
     int Rate,
     int Pitch,
-    int Volume,
     DateTimeOffset SentAt);
 
 public enum LanState
