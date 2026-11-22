@@ -27,12 +27,14 @@ public sealed class TtsItem : INotifyPropertyChanged
         VoiceEntry voice,
         int rate,
         int pitch,
+        int volume = 100,
         string? originLabel = null)
     {
         Text = text;
         Voice = voice;
         Rate = rate;
         Pitch = pitch;
+        Volume = volume;
         OriginLabel = originLabel;
         Preview = BuildPreview(text);
     }
@@ -56,6 +58,12 @@ public sealed class TtsItem : INotifyPropertyChanged
 
     /// <summary>语调：相对原音高的偏移（Hz）。</summary>
     public int Pitch { get; }
+
+    /// <summary>
+    /// 合成时使用的音量（0~100，对应 Edge 的 -100% ~ +0%）。
+    /// 只在合成时用，卡片上不显示——音量是软件全局设置，不属于某条记录。
+    /// </summary>
+    public int Volume { get; }
 
     public List<string> Files { get; } = new();
 

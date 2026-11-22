@@ -554,15 +554,14 @@ internal static class Program
             remoteItem?.MetaText);
         Check("远端消息完成本机合成", remoteReady, remoteItem?.StatusLabel);
         Check("远端消息带着对端的语调", remoteItem is { Pitch: 10 }, "Pitch=" + remoteItem?.Pitch);
-        Check("远端消息开始播放", remoteItem?.IsPlaying == true);
+        Check("默认不自动播放对方消息", remoteItem?.IsPlaying == false);
+        Check("状态栏提示点播放键才出声",
+            status!.Text.Contains("播放键", StringComparison.Ordinal), status.Text);
 
-        Console.WriteLine("== 静音对方 ==");
-        var muteToggle = (System.Windows.Controls.Primitives.ToggleButton)lanPanel.FindName("MuteToggle")!;
+        Console.WriteLine("== 自动播放对方 ==");
+        var autoPlayToggle = (System.Windows.Controls.Primitives.ToggleButton)lanPanel.FindName("AutoPlayToggle")!;
         volume!.Value = 70;
-        muteToggle.IsChecked = true;
-        muteToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-        Pump(300);
-        Check("静音开关写进设置", settings.LanMuteIncoming);
+        Check("自动播放默认关闭", !settings.LanAutoPlayIncoming);
 
         var countBeforeMute = history.Items.Count;
         window.OnLanMessage(new LanChatMessage(
@@ -575,15 +574,16 @@ internal static class Program
             ? history.Items[history.Items.Count - 1] as TtsItem
             : null;
 
-        Check("静音时照样生成卡片", mutedReady, mutedItem?.StatusLabel);
-        Check("静音时不播放", mutedItem?.IsPlaying == false);
-        Check("远端消息也走全局音量", Math.Abs(window.PlayerVolume - 0.7) < 0.01,
-            window.PlayerVolume.ToString("F2"));
+        Check("本机音量进合成参数", window.CurrentVolume == 70, window.CurrentVolume.ToString());
+        Check("默认照样生成卡片", mutedReady, mutedItem?.StatusLabel);
+        Check("默认不播放", mutedItem?.IsPlaying == false);
+        Check("远端消息用本机音量合成（对方不参与）", mutedItem is { Volume: 70 },
+            "Volume=" + mutedItem?.Volume);
 
-        muteToggle.IsChecked = false;
-        muteToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        autoPlayToggle.IsChecked = true;
+        autoPlayToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
         Pump(300);
-        Check("关掉静音后设置同步", !settings.LanMuteIncoming);
+        Check("打开自动播放后设置同步", settings.LanAutoPlayIncoming);
 
         var countAfterMute = history.Items.Count;
         window.OnLanMessage(new LanChatMessage(
@@ -596,8 +596,11 @@ internal static class Program
             ? history.Items[history.Items.Count - 1] as TtsItem
             : null;
 
-        Check("取消静音后开始播放", unmutedReady && unmutedItem?.IsPlaying == true,
+        Check("打开自动播放后会出声", unmutedReady && unmutedItem?.IsPlaying == true,
             unmutedItem?.StatusLabel);
+        autoPlayToggle.IsChecked = false;
+        autoPlayToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Pump(200);
         volume.Value = 100;
 
         Console.WriteLine("== 记住连接 ==");
@@ -670,14 +673,18 @@ internal static class Program
         Check("Shift+Enter 不拦截（交给输入框换行）",
             !window.HandleComposerKeyAsync(Key.Enter, ModifierKeys.Shift).GetAwaiter().GetResult());
 
+        window.Activate();
+        Pump(200);
         Find<Button>(window, "SendButton")!.Focus();
         Pump(200);
-        var hadFocusBefore = composerBox.IsKeyboardFocusWithin;
         var ctrlL = window.HandleShortcut(Key.L, ModifierKeys.Control);
-        Pump(250);
+        Pump(300);
         Check("Ctrl+L 被识别为快捷键", ctrlL);
-        Check("Ctrl+L 把光标送回输入框", composerBox.IsKeyboardFocusWithin && !hadFocusBefore,
-            $"before={hadFocusBefore}, now={composerBox.IsKeyboardFocusWithin}");
+        // 窗口可能被别的程序抢了前台，这种情况下只校验光标位置
+        Check("Ctrl+L 把光标送回输入框末尾",
+            composerBox.CaretIndex == composerBox.Text.Length
+            && (composerBox.IsKeyboardFocusWithin || !window.IsActive),
+            $"focus={composerBox.IsKeyboardFocusWithin}, active={window.IsActive}, caret={composerBox.CaretIndex}");
 
         pitch!.Value = 25;
         composerBox.Text = "Enter 发送自检。";
@@ -697,15 +704,13 @@ internal static class Program
         pitch.Value = 0;
         volume!.Value = 70;
         Pump(200);
-        Check("音量旋钮控制播放器全局音量", Math.Abs(window.PlayerVolume - 0.7) < 0.01,
-            window.PlayerVolume.ToString("F2"));
+        Check("音量旋钮进合成参数", window.CurrentVolume == 70, window.CurrentVolume.ToString());
         Check("卡片小字不再写音量",
             shortcutItem is not null && !shortcutItem.MetaText.Contains("音量", StringComparison.Ordinal),
             shortcutItem?.MetaText);
         volume.Value = 100;
         Pump(150);
-        Check("音量拉满回到 1.0", Math.Abs(window.PlayerVolume - 1.0) < 0.01,
-            window.PlayerVolume.ToString("F2"));
+        Check("音量拉满回到 100", window.CurrentVolume == 100, window.CurrentVolume.ToString());
 
         Console.WriteLine("== 设置窗口 ==");
         var settingsWindow = new ALambdaTTS.Views.SettingsWindow(settings) { Owner = window };

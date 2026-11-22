@@ -53,8 +53,7 @@ public partial class MainWindow : Window
         RateKnob.Value = Math.Clamp(settings.Rate, -50, 100);
         PitchKnob.Value = Math.Clamp(settings.Pitch, -50, 50);
         VolumeKnob.Value = Math.Clamp(settings.Volume, 0, 100);
-        _player.Volume = VolumeKnob.Value / 100.0;
-        VolumeKnob.ValueChanged += (_, value) => _player.Volume = value / 100.0;
+        // 音量走合成参数（MediaPlayer 的软音量在部分声卡上不生效）
 
         _player.PlayingChanged += Player_PlayingChanged;
         _player.DurationResolved += Player_DurationResolved;
@@ -322,8 +321,8 @@ public partial class MainWindow : Window
     /// <summary>当前是否已和另一台电脑配对成功（自检用）。</summary>
     public bool IsLanConnected => _lan.IsConnected;
 
-    /// <summary>播放器的全局音量 0~1（自检用）。</summary>
-    public double PlayerVolume => _player.Volume;
+    /// <summary>当前音量的合成参数（自检用，0~100）。</summary>
+    public int CurrentVolume => (int)VolumeKnob.Value;
 
     private void LanButton_Click(object sender, RoutedEventArgs e)
     {
@@ -371,7 +370,7 @@ public partial class MainWindow : Window
         _settings.LanPort,
         _settings.LanPeerHost,
         _settings.LanAutoConnect,
-        _settings.LanMuteIncoming,
+        _settings.LanAutoPlayIncoming,
         _settings.LanPeerName);
 
     private void EnsurePairCode()
@@ -402,7 +401,7 @@ public partial class MainWindow : Window
         _settings.LanPort = values.Port;
         _settings.LanEnabled = values.Enabled;
         _settings.LanAutoConnect = values.AutoConnect;
-        _settings.LanMuteIncoming = values.MuteIncoming;
+        _settings.LanAutoPlayIncoming = values.AutoPlayIncoming;
 
         if (disabling)
         {
@@ -595,19 +594,21 @@ public partial class MainWindow : Window
                 var message = _remoteQueue.Dequeue();
                 var voice = _catalog.Find(message.Voice ?? string.Empty) ?? _voice;
 
-                // 音量不进合成参数，由播放器的全局音量统一管
+                // 音量不听对方的，用本机旋钮：本机 0 就是真静音
                 var item = new TtsItem(
                     message.Text,
                     voice,
                     message.Rate,
                     message.Pitch,
+                    (int)VolumeKnob.Value,
                     $"来自 {message.FromName}");
 
                 _items.Add(item);
                 ScrollToEnd();
                 StatusText.Text = $"收到 {message.FromName} 的消息，正在合成…";
 
-                await RunSynthesisAsync(item, clearInput: false, autoPlay: !_settings.LanMuteIncoming);
+                // 默认不吵人：对方的消息只生成卡片，点播放键才出声
+                await RunSynthesisAsync(item, clearInput: false, autoPlay: _settings.LanAutoPlayIncoming);
             }
         }
         finally
@@ -665,6 +666,7 @@ public partial class MainWindow : Window
             _voice,
             (int)RateKnob.Value,
             (int)PitchKnob.Value,
+            (int)VolumeKnob.Value,
             lanConnected ? $"由 {LocalDeviceName} 发送" : null);
 
         _items.Add(item);
@@ -748,7 +750,7 @@ public partial class MainWindow : Window
                 item.Voice.ShortName,
                 item.Rate,
                 item.Pitch,
-                100,
+                item.Volume,
                 AppPaths.CacheDir,
                 progress,
                 _cts.Token);
@@ -774,7 +776,7 @@ public partial class MainWindow : Window
             }
             else
             {
-                StatusText.Text = "已生成，静音模式没有播放";
+                StatusText.Text = "收到消息，已生成（点卡片上的播放键才出声）";
             }
         }
         catch (OperationCanceledException)

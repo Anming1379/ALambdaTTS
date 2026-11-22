@@ -258,9 +258,73 @@ catch (Exception ex)
 }
 
 // ---------------------------------------------------------------
-// 9. 局域网：配对 + 收发消息
+// 9. 音量参数真的改变音量（用 ffmpeg 量平均响度）
 // ---------------------------------------------------------------
-Console.WriteLine("9) 局域网配对与消息");
+Console.WriteLine("9) 音量参数生效");
+try
+{
+    static double? MeasureMeanVolume(string file)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo("ffmpeg", $"-hide_banner -i \"{file}\" -af volumedetect -f null -")
+            {
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process is null)
+            {
+                return null;
+            }
+
+            var stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit(20000);
+
+            var match = System.Text.RegularExpressions.Regex.Match(stderr, @"mean_volume:\s*(-?[0-9.]+) dB");
+            return match.Success && double.TryParse(match.Groups[1].Value,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var value)
+                ? value
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    var loud = await TtsService.SynthesizeAsync(
+        "音量测试，这句话用来对比响度。", "zh-CN-XiaoxiaoNeural", 0, 0, 100, cacheDir, null, CancellationToken.None);
+    var quiet = await TtsService.SynthesizeAsync(
+        "音量测试，这句话用来对比响度。", "zh-CN-XiaoxiaoNeural", 0, 0, 30, cacheDir, null, CancellationToken.None);
+
+    var loudLevel = MeasureMeanVolume(loud.Files[0]);
+    var quietLevel = MeasureMeanVolume(quiet.Files[0]);
+    Check("两种音量都生成成功", loud.Files.Count == 1 && quiet.Files.Count == 1);
+
+    if (loudLevel is null || quietLevel is null)
+    {
+        Console.WriteLine("     ffmpeg 不可用，跳过响度对比");
+    }
+    else
+    {
+        Console.WriteLine($"     100%: {loudLevel:F1} dB / 30%: {quietLevel:F1} dB");
+        Check("音量 30% 明显比 100% 小", loudLevel - quietLevel > 5,
+            $"{loudLevel:F1} vs {quietLevel:F1}");
+    }
+}
+catch (Exception ex)
+{
+    Check("音量参数生效", false, $"{ex.GetType().Name}: {ex.Message}");
+}
+
+// ---------------------------------------------------------------
+// 10. 局域网：配对 + 收发消息
+// ---------------------------------------------------------------
+Console.WriteLine("10) 局域网配对与消息");
 try
 {
     static async Task<bool> WaitUntil(Func<bool> condition, int timeoutMs)
