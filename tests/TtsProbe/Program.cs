@@ -338,7 +338,8 @@ try
         var frame = LanCodec.Decode(reply.Buffer);
         Check("发现应答能被解析", frame?.Type == "discover-reply" && frame.DeviceId is { Length: > 8 },
             frame?.Type ?? "null");
-        Check("发现应答带着设备名", frame?.Name is "电脑 A" or "电脑 B", frame?.Name);
+        // 本机可能同时开着正式版程序（它也占着 45789），所以只要求有名字
+        Check("发现应答带着设备名", !string.IsNullOrWhiteSpace(frame?.Name), frame?.Name ?? "空");
     }
 
     await peerA.DisconnectAsync();
