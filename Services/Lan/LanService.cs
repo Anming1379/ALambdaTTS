@@ -499,7 +499,7 @@ public sealed class LanService : IAsyncDisposable
             frame.Voice,
             frame.Rate,
             frame.Pitch,
-            frame.Volume <= 0 ? 100 : frame.Volume,
+            Math.Clamp(frame.Volume, 0, 100),
             frame.SentAt > 0
                 ? DateTimeOffset.FromUnixTimeMilliseconds(frame.SentAt)
                 : DateTimeOffset.Now);

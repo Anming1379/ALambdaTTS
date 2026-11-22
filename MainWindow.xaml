@@ -8,7 +8,7 @@
         xmlns:themes="clr-namespace:ALambdaTTS.Themes"
         Title="ALambda TTS"
         Width="600" Height="760"
-        MinWidth="540" MinHeight="520"
+        MinWidth="560" MinHeight="520"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource Background}"
         FontFamily="{StaticResource BodyFont}"
@@ -66,10 +66,10 @@
                     </StackPanel>
                 </Button>
 
-                <!-- 语速 / 语调 -->
+                <!-- 语速 / 语调 / 音量 -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right"
                             VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center"
+                    <StackPanel Orientation="Horizontal" Margin="0,0,10,0" VerticalAlignment="Center"
                                 ToolTip="语速：鼠标上划变大，双击复位">
                         <controls:Knob x:Name="RateKnob" Width="26" Height="26"
                                        Minimum="-50" Maximum="100" CenterValue="0"
@@ -84,7 +84,7 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                    <StackPanel Orientation="Horizontal" Margin="0,0,10,0" VerticalAlignment="Center"
                                 ToolTip="语调：鼠标上划变高，双击复位">
                         <controls:Knob x:Name="PitchKnob" Width="26" Height="26"
                                        Minimum="-50" Maximum="50" CenterValue="0"
@@ -99,6 +99,19 @@
                         </StackPanel>
                     </StackPanel>
 
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                ToolTip="音量：鼠标上划变大，双击复位">
+                        <controls:Knob x:Name="VolumeKnob" Width="26" Height="26"
+                                       Minimum="0" Maximum="100" Step="5" ResetValue="100" Value="100" />
+                        <StackPanel VerticalAlignment="Center" Margin="6,0,0,0">
+                            <TextBlock Text="音量" FontSize="9.5" Foreground="{DynamicResource TextMuted}" />
+                            <TextBlock FontSize="11.5" Foreground="{DynamicResource Accent}"
+                                       Width="40" TextAlignment="Left"
+                                       Text="{Binding Value, ElementName=VolumeKnob,
+                                              Converter={StaticResource KnobValueConverter},
+                                              ConverterParameter=volume}" />
+                        </StackPanel>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- 局域网模式 -->

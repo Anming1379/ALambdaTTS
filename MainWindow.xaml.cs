@@ -52,6 +52,7 @@ public partial class MainWindow : Window
 
         RateKnob.Value = Math.Clamp(settings.Rate, -50, 100);
         PitchKnob.Value = Math.Clamp(settings.Pitch, -50, 50);
+        VolumeKnob.Value = Math.Clamp(settings.Volume, 0, 100);
 
         _player.PlayingChanged += Player_PlayingChanged;
         _player.DurationResolved += Player_DurationResolved;
@@ -164,6 +165,7 @@ public partial class MainWindow : Window
         _settings.WindowHeight = Height;
         _settings.Rate = (int)RateKnob.Value;
         _settings.Pitch = (int)PitchKnob.Value;
+        _settings.Volume = (int)VolumeKnob.Value;
         _settings.VoiceShortName = _voice.ShortName;
         SettingsStore.Save(_settings);
     }
@@ -615,7 +617,7 @@ public partial class MainWindow : Window
             _voice.ShortName,
             (int)RateKnob.Value,
             (int)PitchKnob.Value,
-            100,
+            (int)VolumeKnob.Value,
             DateTimeOffset.Now);
 
         if (!await _lan.SendAsync(message))
@@ -656,7 +658,7 @@ public partial class MainWindow : Window
             _voice,
             (int)RateKnob.Value,
             (int)PitchKnob.Value,
-            100,
+            (int)VolumeKnob.Value,
             lanConnected ? $"由 {LocalDeviceName} 发送" : null);
 
         _items.Add(item);

@@ -64,11 +64,18 @@ internal static class Program
             Volume = 100,
             Rate = 0,
             DownloadFolder = downloadDir,
+            LanPort = 47501,
         };
 
         var window = new MainWindow(settings);
         window.Show();
         Pump(1200);
+
+        var statusProbe = Find<TextBlock>(window, "StatusText");
+        PumpUntil(
+            () => statusProbe is not null
+                  && !statusProbe.Text.StartsWith("正在获取", StringComparison.Ordinal),
+            40000);
 
         Console.WriteLine("== 布局与默认状态 ==");
         Check("窗口宽度 560", Math.Abs(window.ActualWidth - 560) < 40, window.ActualWidth.ToString("F1"));
@@ -77,12 +84,13 @@ internal static class Program
         var rate = Find<Knob>(window, "RateKnob");
         var pitch = Find<Knob>(window, "PitchKnob");
         var volume = Find<Knob>(window, "VolumeKnob");
-        Check("工具栏只剩语速与语调两个旋钮", rate is not null && pitch is not null);
-        Check("音量旋钮已移除", volume is null);
+        Check("工具栏三个旋钮都在", rate is not null && pitch is not null && volume is not null);
         Check("语调旋钮默认 0", pitch is not null && Math.Abs(pitch.Value) < 0.001, pitch?.Value.ToString());
         Check("语速旋钮默认 0", rate is not null && Math.Abs(rate.Value) < 0.001, rate?.Value.ToString());
+        Check("音量旋钮默认 100", volume is not null && Math.Abs(volume.Value - 100) < 0.001, volume?.Value.ToString());
         Check("语速范围 -50~100", rate is not null && rate.Minimum == -50 && rate.Maximum == 100);
         Check("语调范围 -50~50", pitch is not null && pitch.Minimum == -50 && pitch.Maximum == 50);
+        Check("音量范围 0~100", volume is not null && volume.Minimum == 0 && volume.Maximum == 100);
 
         var send = Find<Button>(window, "SendButton");
         var input = Find<TextBox>(window, "InputBox");
@@ -110,6 +118,7 @@ internal static class Program
         Save(window, "02-focused-light.png");
         SaveZoom(window, "02-toolbar-zoom.png", 2.4);
         SaveElement(rate, "02-knob-rate.png", 10);
+        SaveElement(volume, "02-knob-volume.png", 10);
 
         input.Text = "你好，这是 ALambda TTS 的界面自检。";
         Pump(200);
@@ -119,19 +128,25 @@ internal static class Program
         Console.WriteLine("== 旋钮交互 ==");
         rate!.Value = 25;
         pitch!.Value = 20;
+        volume!.Value = 60;
         Pump(50);
         Check("旋钮值可写",
-            Math.Abs(rate.Value - 25) < 0.001 && Math.Abs(pitch.Value - 20) < 0.001);
+            Math.Abs(rate.Value - 25) < 0.001 && Math.Abs(pitch.Value - 20) < 0.001
+            && Math.Abs(volume.Value - 60) < 0.001);
         var rateX1 = rate.TransformToAncestor(window).Transform(new Point(0, 0)).X;
         var pitchX1 = pitch.TransformToAncestor(window).Transform(new Point(0, 0)).X;
+        var volumeX1 = volume.TransformToAncestor(window).Transform(new Point(0, 0)).X;
         rate.Value = 100;
         pitch.Value = -50;
+        volume.Value = 5;
         Pump(200);
         var rateX2 = rate.TransformToAncestor(window).Transform(new Point(0, 0)).X;
         var pitchX2 = pitch.TransformToAncestor(window).Transform(new Point(0, 0)).X;
+        var volumeX2 = volume.TransformToAncestor(window).Transform(new Point(0, 0)).X;
         Check("数值变化时旋钮不位移",
-            Math.Abs(rateX1 - rateX2) < 0.6 && Math.Abs(pitchX1 - pitchX2) < 0.6,
-            $"rate {rateX1:F1}->{rateX2:F1}, pitch {pitchX1:F1}->{pitchX2:F1}");
+            Math.Abs(rateX1 - rateX2) < 0.6 && Math.Abs(pitchX1 - pitchX2) < 0.6
+            && Math.Abs(volumeX1 - volumeX2) < 0.6,
+            $"rate {rateX1:F1}->{rateX2:F1}, pitch {pitchX1:F1}->{pitchX2:F1}, volume {volumeX1:F1}->{volumeX2:F1}");
         Check("语调显示带 Hz",
             new ALambdaTTS.Utils.KnobValueConverter()
                 .Convert(20d, typeof(string), "pitch", System.Globalization.CultureInfo.InvariantCulture) as string == "+20Hz",
@@ -140,6 +155,7 @@ internal static class Program
 
         rate.Value = 0;
         pitch.Value = 0;
+        volume.Value = 100;
 
         Console.WriteLine("== 真实合成 + 自动播放 ==");
         send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -638,6 +654,22 @@ internal static class Program
         var shortcutItem = history.Items.Count > 0 ? history.Items[history.Items.Count - 1] as TtsItem : null;
         Check("语调随请求一起提交", shortcutItem is { Pitch: 25 }, "Pitch=" + shortcutItem?.Pitch);
         pitch.Value = 0;
+        volume!.Value = 70;
+        composerBox.Text = "音量参数自检。";
+        Pump(150);
+        composerBox.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window)!, 0, Key.Enter)
+        {
+            RoutedEvent = Keyboard.PreviewKeyDownEvent,
+        });
+        var volumeSent = PumpUntil(
+            () => history.Items.Count > 0
+                  && history.Items[history.Items.Count - 1] is TtsItem { State: TtsState.Ready, Volume: 70 },
+            60000);
+        var volumeItem = history.Items.Count > 0 ? history.Items[history.Items.Count - 1] as TtsItem : null;
+        Check("音量随请求一起提交", volumeSent, "Volume=" + volumeItem?.Volume);
+        Check("卡片小字显示音量", volumeItem?.MetaText.Contains("音量 70%", StringComparison.Ordinal) == true,
+            volumeItem?.MetaText);
+        volume.Value = 100;
 
         Console.WriteLine("== 设置窗口 ==");
         var settingsWindow = new ALambdaTTS.Views.SettingsWindow(settings) { Owner = window };
